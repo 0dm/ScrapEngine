@@ -8,6 +8,7 @@
 #include "app/modeling/Mesh.hpp"
 #include "app/modeling/Texture.hpp"
 #include "app/modeling/Transform.hpp"
+#include <app/platform/ProjectRoot.hpp>
 
 #include <glm/ext/quaternion_trigonometric.hpp>
 #include <glm/gtc/constants.hpp>
@@ -139,9 +140,12 @@ int main() {
   using namespace sauce;
 
   try {
-    const auto projectRoot = std::filesystem::current_path();
+    std::filesystem::path projectRoot = sauce::platform::findProjectRootNearExecutable();
+    if (projectRoot.empty()) {
+      projectRoot = std::filesystem::canonical(std::filesystem::current_path());
+    }
     const auto textureDirectory = std::filesystem::absolute(projectRoot / "testScene" / "textures2");
-    const auto cubeMesh = loadPrimitiveMesh((projectRoot / "assets/models/Cube.gltf").string());
+    const auto cubeMesh = loadPrimitiveMesh(projectRoot / "assets/models/Cube.gltf");
 
     CameraCreateInfo cameraInfo{
         .scrWidth = 1280.0f,

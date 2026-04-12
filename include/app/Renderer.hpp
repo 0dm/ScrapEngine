@@ -20,6 +20,7 @@
 #include <app/ImGuiRenderer.hpp>
 #include <app/ImageUtils.hpp>
 #include <app/LogicalDevice.hpp>
+#include <app/platform/PlatformView.hpp>
 #include <app/Scene.hpp>
 #include <app/SwapChain.hpp>
 
@@ -85,7 +86,7 @@ struct RendererCreateInfo {
   const sauce::PhysicalDevice& physicalDevice;
   const sauce::LogicalDevice& logicalDevice;
   const sauce::RenderSurface& renderSurface;
-  GLFWwindow* window;
+  sauce::platform::PlatformView& platformView;
   bool vsync = true;
 };
 
@@ -101,7 +102,8 @@ public:
     : pPhysicalDevice(&createInfo.physicalDevice),
       pLogicalDevice(&createInfo.logicalDevice),
       pRenderSurface(&createInfo.renderSurface),
-      pWindow(createInfo.window)
+      pPlatformView(&createInfo.platformView),
+      vsyncEnabled(createInfo.vsync)
   {
     queueIndex = createInfo.logicalDevice.getQueueIndex();
     pQueue = std::make_unique<vk::raii::Queue>(*createInfo.logicalDevice, queueIndex, 0);
@@ -110,7 +112,7 @@ public:
         createInfo.physicalDevice,
         createInfo.logicalDevice,
         createInfo.renderSurface,
-        createInfo.window,
+        createInfo.platformView.getFramebufferExtent(),
         createInfo.vsync
     );
 
@@ -236,17 +238,18 @@ public:
   }
 
   void recreateSwapChain() {
-    // Handle minimized windows
-    int width = 0, height = 0;
-    glfwGetFramebufferSize(pWindow, &width, &height);
-    while (width == 0 || height == 0) {
-      glfwGetFramebufferSize(pWindow, &width, &height);
-      glfwWaitEvents();
+    const vk::Extent2D framebufferExtent = pPlatformView->getFramebufferExtent();
+    if (framebufferExtent.width == 0 || framebufferExtent.height == 0) {
+      framebufferResized = true;
+      return;
     }
 
     (*pLogicalDevice)->waitIdle();
 
     // Destroy old resources in correct order
+    offscreenImageView = nullptr;
+    offscreenImageMemory = nullptr;
+    offscreenImage = nullptr;
     depthImageView = nullptr;
     depthImageMemory = nullptr;
     depthImage = nullptr;
@@ -255,10 +258,16 @@ public:
 
     // Recreate swapchain and dependent resources
     pSwapChain = std::make_unique<sauce::SwapChain>(
-        *pPhysicalDevice, *pLogicalDevice, *pRenderSurface, pWindow
+        *pPhysicalDevice,
+        *pLogicalDevice,
+        *pRenderSurface,
+        framebufferExtent,
+        vsyncEnabled
     );
 
     createDepthResources(*pPhysicalDevice, *pLogicalDevice);
+    createOffscreenResources(*pPhysicalDevice, *pLogicalDevice);
+    updatePostProcessDescriptorSet();
 
     for (size_t i = 0; i < pSwapChain->getImages().size(); ++i) {
       renderFinishedSemaphores.emplace_back(**pLogicalDevice, vk::SemaphoreCreateInfo{});
@@ -408,15 +417,21 @@ public:
   }
 
   void createPostProcessDescriptorSets(const sauce::LogicalDevice& logicalDevice) {
-    std::vector<vk::DescriptorSetLayout> layouts{ 1, *postProcessDescriptorSetLayout };
-    vk::DescriptorSetAllocateInfo dsAllocInfo {
-      .descriptorPool = descriptorPool,
-      .descriptorSetCount = static_cast<uint32_t>(layouts.size()),
-      .pSetLayouts = layouts.data()
-    };
+    if (postProcessDescriptorSets.empty()) {
+      std::vector<vk::DescriptorSetLayout> layouts{ 1, *postProcessDescriptorSetLayout };
+      vk::DescriptorSetAllocateInfo dsAllocInfo {
+        .descriptorPool = descriptorPool,
+        .descriptorSetCount = static_cast<uint32_t>(layouts.size()),
+        .pSetLayouts = layouts.data()
+      };
 
-    postProcessDescriptorSets = logicalDevice->allocateDescriptorSets(dsAllocInfo);
+      postProcessDescriptorSets = logicalDevice->allocateDescriptorSets(dsAllocInfo);
+    }
 
+    updatePostProcessDescriptorSet();
+  }
+
+  void updatePostProcessDescriptorSet() {
     vk::DescriptorImageInfo imageInfo {
       .sampler = *offscreenSampler,
       .imageView = *offscreenImageView,
@@ -432,7 +447,7 @@ public:
       .pImageInfo = &imageInfo,
     };
 
-    logicalDevice->updateDescriptorSets(descriptorWrite, {});
+    (*pLogicalDevice)->updateDescriptorSets(descriptorWrite, {});
   }
 
 
@@ -788,6 +803,20 @@ public:
   }
 
   void drawFrame(const sauce::LogicalDevice& logicalDevice, const sauce::Scene& scene, sauce::ImGuiRenderer* imguiRenderer = nullptr){
+    const vk::Extent2D framebufferExtent = pPlatformView->getFramebufferExtent();
+    if (framebufferExtent.width == 0 || framebufferExtent.height == 0) {
+      framebufferResized = true;
+      return;
+    }
+
+    if (framebufferResized) {
+      framebufferResized = false;
+      recreateSwapChain();
+      if (framebufferResized) {
+        return;
+      }
+    }
+
     // Wait for the previous frame to finish rendering before submitting the next frame
     auto fenceResult = logicalDevice->waitForFences(*inFlightFences[frameIndex], vk::True, UINT64_MAX);
     if (fenceResult != vk::Result::eSuccess) {
@@ -1009,7 +1038,8 @@ private:
   const sauce::PhysicalDevice* pPhysicalDevice;
   const sauce::LogicalDevice* pLogicalDevice;
   const sauce::RenderSurface* pRenderSurface;
-  GLFWwindow* pWindow;
+  sauce::platform::PlatformView* pPlatformView;
+  bool vsyncEnabled = true;
 
   std::unique_ptr<vk::raii::Queue> pQueue;
   std::unique_ptr<sauce::SwapChain> pSwapChain;

@@ -28,3 +28,9 @@ ModelLoader.cpp
 
 imgui.ini
 imgui.ini
+/temp_scene_extract
+/assets
+.DS_Store
+/build-ios-device/
+/build-ios-xcode/
+/build-macos/

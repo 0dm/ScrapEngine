@@ -5,7 +5,6 @@
 #include <vulkan/vulkan_core.h>
 #include <vulkan/vulkan_raii.hpp>
 
-#include <GLFW/glfw3.h>
 #include <imgui.h>
 
 #include <cstdlib>
@@ -23,6 +22,7 @@
 #include <app/RenderSurface.hpp>
 #include <app/SwapChain.hpp>
 #include <app/ImGuiRenderer.hpp>
+#include <app/platform/PlatformView.hpp>
 #include <app/ui/ImGuiComponentManager.hpp>
 #include <app/ui/components/HelloWorldWindow.hpp>
 #include <app/ui/components/DebugStatsWindow.hpp>
@@ -50,21 +50,22 @@ class RigidBodyComponent;
 class SauceEngineApp {
 public:
   SauceEngineApp(); // Constructor to initialize pImGuiComponentManager
-  void run(const uint32_t width, const uint32_t height);
+  void initialize(platform::PlatformView& platformView, uint32_t width, uint32_t height);
+  void tick(float deltaTime);
+  void shutdown();
 
   ~SauceEngineApp();
 
 private:
-  GLFWwindow *window;
+  platform::PlatformView* platformView = nullptr;
 
-  std::chrono::steady_clock::time_point lastFrameTime = std::chrono::steady_clock::now();
-  double deltaFrame = 0.0f;
   double deltaUpdate = 0.0;
+  float frameDelta = 1.0f / 60.0f;
 
   float lastX = 0.0f;
   float lastY = 0.0f;
   bool firstMouse = true;
-  bool cursorCaptured = true;
+  bool cursorCaptured = false;
   bool gravePressedLastFrame = false;
   bool demoTriggerPressedLastFrame = false;
   bool spacePressedLastFrame = false;
@@ -105,11 +106,7 @@ private:
   std::function<void(sauce::ui::ImGuiComponentManager&)> pCustomUIBuilder;
 
   void initVulkan();
-  void initWindow();
-  void mainLoop();
   void processInput(float deltaTime);
-  static void mouseCallback(GLFWwindow* window, double xposIn, double yposIn);
-  static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 
   void buildExampleUI();
 

@@ -40,6 +40,20 @@
 namespace sauce::editor {
 namespace {
 
+bool isKeyDown(const platform::InputState& input, platform::Key key) {
+  return input.keys[platform::keyIndex(key)];
+}
+
+bool isKeyPressed(const platform::InputState& input, platform::Key key) {
+  return input.keyPressed[platform::keyIndex(key)];
+}
+
+const platform::MouseButtonState& getMouseButton(
+    const platform::InputState& input,
+    platform::MouseButton button) {
+  return input.pointer.buttons[static_cast<std::size_t>(button)];
+}
+
 #if !defined(_WIN32) && !defined(_WIN64)
 std::filesystem::path getCurrentExecutablePath() {
 #if defined(__APPLE__)
@@ -113,12 +127,10 @@ EditorApp::~EditorApp() {
 
   pImGuiRenderer.reset();
   pRenderer.reset();
+  // Same static layout as main app: if Renderer construction fails after Material::initDescriptorSetLayout,
+  // ~Renderer never runs; always clear while the device is still valid.
+  modeling::Material::cleanup();
   pScene.reset();
-
-  if (window) {
-    glfwDestroyWindow(window);
-    glfwTerminate();
-  }
 
   sauce::Log::shutdown();
 }
@@ -135,37 +147,20 @@ void EditorApp::run() {
 }
 
 void EditorApp::initWindow() {
-  glfwInit();
-
-  glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-  glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-
-  window = glfwCreateWindow(EDITOR_WIDTH, EDITOR_HEIGHT, "SauceEditor", nullptr, nullptr);
-
-  glfwSetWindowUserPointer(window, this);
-  glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
-  glfwSetMouseButtonCallback(window, mouseButtonCallback);
-  glfwSetCursorPosCallback(window, cursorPosCallback);
-  glfwSetScrollCallback(window, scrollCallback);
-  glfwSetKeyCallback(window, keyCallback);
-  glfwSetDropCallback(window, dropCallback);
-
-  glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-}
-
-void EditorApp::framebufferResizeCallback(GLFWwindow* window, int /*width*/, int /*height*/) {
-  auto* app = static_cast<EditorApp*>(glfwGetWindowUserPointer(window));
-  if (app && app->pRenderer) {
-    app->pRenderer->setFramebufferResized();
-  }
+  window = sauce::platform::createPlatformWindow({
+      .title = "SauceEditor",
+      .width = EDITOR_WIDTH,
+      .height = EDITOR_HEIGHT,
+      .resizable = true,
+      .acceptFileDrops = true,
+  });
+  window->setCursorCaptured(false);
 }
 
 void EditorApp::initVulkan() {
-  uint32_t glfwExtensionsCount = 0;
-  const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionsCount);
-  pInstance = std::make_unique<sauce::Instance>(glfwExtensions, glfwExtensionsCount);
+  pInstance = std::make_unique<sauce::Instance>();
 
-  pRenderSurface = std::make_unique<sauce::RenderSurface>(*pInstance, window);
+  pRenderSurface = std::make_unique<sauce::RenderSurface>(*pInstance, window->getMetalLayerHandle());
 
   physicalDevice = { *pInstance };
   logicalDevice = { physicalDevice, *pRenderSurface };
@@ -181,7 +176,7 @@ void EditorApp::initVulkan() {
     .physicalDevice = physicalDevice,
     .logicalDevice = logicalDevice,
     .renderSurface = *pRenderSurface,
-    .window = window,
+    .platformView = *window,
   };
 
   pRenderer = std::make_unique<sauce::Renderer>(rendererCreateInfo);
@@ -191,7 +186,7 @@ void EditorApp::initVulkan() {
     .physicalDevice = physicalDevice,
     .logicalDevice = logicalDevice,
     .queueFamilyIndex = logicalDevice.getQueueIndex(),
-    .window = window,
+    .platformView = *window,
     .queue = pRenderer->getQueue(),
     .commandPool = pRenderer->getCommandPool(),
     .swapChain = pRenderer->getSwapChain(),
@@ -829,13 +824,18 @@ void EditorApp::recordEditorCommandBuffer(vk::raii::CommandBuffer& cmd, uint32_t
 }
 
 void EditorApp::mainLoop() {
-  while (!glfwWindowShouldClose(window)) {
+  while (!window->shouldClose()) {
     auto currentFrameTime = std::chrono::steady_clock::now();
     deltaTime = std::chrono::duration<float>(currentFrameTime - lastFrameTime).count();
     lastFrameTime = currentFrameTime;
 
-    glfwPollEvents();
-    processInput();
+    window->pumpEvents();
+    const auto input = window->consumeInputState();
+    if (input.framebufferResized && pRenderer) {
+      pRenderer->setFramebufferResized();
+    }
+
+    processInput(input);
 
     editorCamera.update(deltaTime);
     editorCamera.syncToSceneCamera(pScene->getCameraRW());
@@ -878,7 +878,7 @@ void EditorApp::mainLoop() {
     // Upload mesh GPU resources for any newly imported models
     uploadMeshGPUResources();
 
-    pImGuiRenderer->newFrame();
+    pImGuiRenderer->newFrame(deltaTime);
     buildEditorUI();
 
     pRenderer->drawFrame(logicalDevice, *pScene, pImGuiRenderer.get());
@@ -887,16 +887,20 @@ void EditorApp::mainLoop() {
   logicalDevice->waitIdle();
 }
 
-void EditorApp::processInput() {
+void EditorApp::processInput(const sauce::platform::InputState& input) {
+  handleDroppedFiles(input);
+  handleKeyboardShortcuts(input);
+  handlePointerInput(input);
+
   // Always allow fly mode WASD when in fly mode (cursor is captured)
   if (editorCamera.getMode() == EditorCamera::Mode::Fly) {
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+    if (isKeyDown(input, platform::Key::W))
       editorCamera.flyMoveForward(deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    if (isKeyDown(input, platform::Key::S))
       editorCamera.flyMoveBackward(deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+    if (isKeyDown(input, platform::Key::A))
       editorCamera.flyMoveLeft(deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+    if (isKeyDown(input, platform::Key::D))
       editorCamera.flyMoveRight(deltaTime);
     return;
   }
@@ -904,6 +908,269 @@ void EditorApp::processInput() {
   // In orbit mode, only process input when viewport hovered
   if (!viewportHovered || ImGui::GetIO().WantCaptureKeyboard) {
     return;
+  }
+}
+
+void EditorApp::handleDroppedFiles(const sauce::platform::InputState& input) {
+  if (!assetBrowserPanel) {
+    return;
+  }
+
+  for (const auto& path : input.droppedPaths) {
+    assetBrowserPanel->handleFileDrop(path);
+  }
+}
+
+void EditorApp::handleKeyboardShortcuts(const sauce::platform::InputState& input) {
+  const bool ctrl = input.controlDown;
+  const bool shift = input.shiftDown;
+
+  if (ctrl && isKeyPressed(input, platform::Key::S) && shift) {
+    std::string defaultPath = pScene->hasFilePath()
+        ? pScene->getCurrentFilePath()
+        : (std::filesystem::current_path() / "assets" / "scene.gltf").string();
+    std::strncpy(dialogPathBuf, defaultPath.c_str(), sizeof(dialogPathBuf) - 1);
+    dialogPathBuf[sizeof(dialogPathBuf) - 1] = '\0';
+    showSaveAsDialog = true;
+    return;
+  }
+  if (ctrl && isKeyPressed(input, platform::Key::S)) {
+    saveScene();
+    return;
+  }
+  if (ctrl && isKeyPressed(input, platform::Key::O)) {
+    std::string defaultPath = pScene->hasFilePath()
+        ? pScene->getCurrentFilePath()
+        : (std::filesystem::current_path() / "assets" / "scene.gltf").string();
+    std::strncpy(dialogPathBuf, defaultPath.c_str(), sizeof(dialogPathBuf) - 1);
+    dialogPathBuf[sizeof(dialogPathBuf) - 1] = '\0';
+    showOpenDialog = true;
+    return;
+  }
+  if (ctrl && isKeyPressed(input, platform::Key::N)) {
+    logicalDevice->waitIdle();
+    pScene->getEntitiesMut().clear();
+    pScene->setCurrentFilePath("");
+    selectionManager.deselect();
+    setStatusMessage("New scene created");
+    return;
+  }
+  if (ctrl && isKeyPressed(input, platform::Key::D)) {
+    selectionManager.deselect();
+    return;
+  }
+  if (ctrl && isKeyPressed(input, platform::Key::P)) {
+    if (playModeActive) {
+      stopPlayMode();
+    } else {
+      startPlayMode();
+    }
+    return;
+  }
+
+  if (ImGui::GetIO().WantCaptureKeyboard) {
+    return;
+  }
+
+  if (isKeyPressed(input, platform::Key::Escape)) {
+    if (editorCamera.getMode() == EditorCamera::Mode::Fly) {
+      editorCamera.endFlyMode();
+      rightMouseDown = false;
+      window->setCursorCaptured(false);
+      return;
+    }
+    window->requestClose();
+  }
+
+  if (isKeyPressed(input, platform::Key::F)) {
+    auto* entity = selectionManager.getSelectedEntity(*pScene);
+    if (entity) {
+      auto* tc = entity->getComponent<TransformComponent>();
+      if (tc) {
+        editorCamera.focusOn(tc->getTranslation());
+        setStatusMessage("Focused on: " + entity->get_name());
+      }
+    }
+  }
+
+  if (isKeyPressed(input, platform::Key::DeleteKey)) {
+    int idx = selectionManager.getSelectedIndex();
+    auto& entities = pScene->getEntitiesMut();
+    if (idx >= 0 && idx < static_cast<int>(entities.size())) {
+      std::string name = entities[idx].get_name();
+      logicalDevice->waitIdle();
+      entities.erase(entities.begin() + idx);
+      selectionManager.deselect();
+      setStatusMessage("Deleted: " + name);
+    }
+  }
+
+  if (editorCamera.getMode() != EditorCamera::Mode::Fly && !ctrl) {
+    if (isKeyPressed(input, platform::Key::W)) {
+      activeGizmoMode = GizmoType::Translate;
+      if (pGizmoRenderer) pGizmoRenderer->setActiveGizmo(GizmoType::Translate);
+      setStatusMessage("Gizmo: Translate");
+    }
+    if (isKeyPressed(input, platform::Key::E)) {
+      activeGizmoMode = GizmoType::Rotate;
+      if (pGizmoRenderer) pGizmoRenderer->setActiveGizmo(GizmoType::Rotate);
+      setStatusMessage("Gizmo: Rotate");
+    }
+    if (isKeyPressed(input, platform::Key::R)) {
+      activeGizmoMode = GizmoType::Scale;
+      if (pGizmoRenderer) pGizmoRenderer->setActiveGizmo(GizmoType::Scale);
+      setStatusMessage("Gizmo: Scale");
+    }
+  }
+}
+
+void EditorApp::handlePointerInput(const sauce::platform::InputState& input) {
+  const auto& leftMouse = getMouseButton(input, platform::MouseButton::Left);
+  const auto& rightMouse = getMouseButton(input, platform::MouseButton::Right);
+  const auto& middleMouse = getMouseButton(input, platform::MouseButton::Middle);
+
+  const float xpos = input.pointer.x;
+  const float ypos = input.pointer.y;
+  const float deltaX = input.pointer.deltaX;
+  const float deltaY = -input.pointer.deltaY;
+
+  bool guardPress = false;
+  if (leftMouse.pressed || rightMouse.pressed || middleMouse.pressed) {
+    const bool imguiWants = ImGui::GetIO().WantCaptureMouse;
+    const bool inFlyMode = editorCamera.getMode() == EditorCamera::Mode::Fly;
+    guardPress = imguiWants && !viewportHovered && !inFlyMode;
+  }
+
+  if (rightMouse.pressed && !guardPress) {
+    rightMouseDown = true;
+    lastMouseX = xpos;
+    lastMouseY = ypos;
+    if (viewportHovered) {
+      editorCamera.beginFlyMode();
+      window->setCursorCaptured(true);
+    }
+  }
+  if (rightMouse.released) {
+    rightMouseDown = false;
+    if (editorCamera.getMode() == EditorCamera::Mode::Fly) {
+      editorCamera.endFlyMode();
+      window->setCursorCaptured(false);
+    }
+  }
+
+  if (middleMouse.pressed && !guardPress) {
+    middleMouseDown = true;
+    lastMouseX = xpos;
+    lastMouseY = ypos;
+  }
+  if (middleMouse.released) {
+    middleMouseDown = false;
+  }
+
+  if (leftMouse.pressed && !guardPress) {
+    leftMouseDown = true;
+    lastMouseX = xpos;
+    lastMouseY = ypos;
+    mousePressX = xpos;
+    mousePressY = ypos;
+
+    if (viewportHovered && selectionManager.hasSelection() && pGizmoRenderer) {
+      auto* gizmo = pGizmoRenderer->getActiveGizmo();
+      auto* entity = selectionManager.getSelectedEntity(*pScene);
+      if (gizmo && entity) {
+        auto* tc = entity->getComponent<TransformComponent>();
+        if (tc) {
+          auto* vp = static_cast<ViewportPanel*>(viewportPanel.get());
+          ImVec2 vpPos = vp->getViewportScreenPos();
+          ImVec2 vpSize = vp->getViewportSize();
+          const float localX = xpos - vpPos.x;
+          const float localY = ypos - vpPos.y;
+          Ray ray = editorCamera.screenToWorldRay(localX, localY, vpSize.x, vpSize.y);
+
+          float dist = glm::length(editorCamera.getPosition() - tc->getTranslation());
+          float gizmoScale = dist * GizmoRenderer::SCALE_FACTOR;
+          GizmoAxis hitAxis = gizmo->hitTest(ray, tc->getTranslation(), tc->getRotation(), gizmoScale);
+          if (hitAxis != GizmoAxis::None) {
+            gizmo->beginInteraction(hitAxis, ray, tc->getTranslation(), tc->getRotation());
+            gizmoInteracting = true;
+          }
+        }
+      }
+    }
+  }
+  if (leftMouse.released) {
+    if (gizmoInteracting && pGizmoRenderer) {
+      if (auto* gizmo = pGizmoRenderer->getActiveGizmo()) {
+        gizmo->endInteraction();
+      }
+      gizmoInteracting = false;
+    } else {
+      float dx = xpos - mousePressX;
+      float dy = ypos - mousePressY;
+      if (std::sqrt(dx * dx + dy * dy) < 3.0f) {
+        pickEntityAtScreen(xpos, ypos);
+      }
+    }
+    leftMouseDown = false;
+  }
+
+  if (input.pointer.scrollY != 0.0f && viewportHovered) {
+    editorCamera.zoom(input.pointer.scrollY);
+  }
+
+  if (deltaX == 0.0f && deltaY == 0.0f) {
+    return;
+  }
+
+  lastMouseX = xpos;
+  lastMouseY = ypos;
+
+  if (rightMouseDown && editorCamera.getMode() == EditorCamera::Mode::Fly) {
+    editorCamera.flyMouseLook(deltaX, deltaY);
+    return;
+  }
+
+  if (gizmoInteracting && leftMouseDown && pGizmoRenderer) {
+    auto* gizmo = pGizmoRenderer->getActiveGizmo();
+    auto* entity = selectionManager.getSelectedEntity(*pScene);
+    if (gizmo && entity) {
+      auto* tc = entity->getComponent<TransformComponent>();
+      if (tc) {
+        auto* vp = static_cast<ViewportPanel*>(viewportPanel.get());
+        ImVec2 vpPos = vp->getViewportScreenPos();
+        ImVec2 vpSize = vp->getViewportSize();
+        const float localX = xpos - vpPos.x;
+        const float localY = ypos - vpPos.y;
+        Ray ray = editorCamera.screenToWorldRay(localX, localY, vpSize.x, vpSize.y);
+
+        glm::vec3 delta = gizmo->updateInteraction(ray, tc->getTranslation(), tc->getRotation());
+
+        GizmoType type = pGizmoRenderer->getActiveGizmoType();
+        if (type == GizmoType::Translate) {
+          tc->setTranslation(tc->getTranslation() + delta);
+        } else if (type == GizmoType::Rotate) {
+          float angle = glm::length(delta);
+          if (angle > 1e-6f) {
+            glm::vec3 axis = delta / angle;
+            glm::quat rot = glm::angleAxis(angle, axis);
+            tc->setRotation(rot * tc->getRotation());
+          }
+        } else if (type == GizmoType::Scale) {
+          tc->setScale(tc->getScale() + delta);
+        }
+      }
+    }
+    return;
+  }
+
+  if (!viewportHovered) {
+    return;
+  }
+
+  if (leftMouseDown && editorCamera.getMode() == EditorCamera::Mode::Orbit) {
+    editorCamera.orbit(deltaX * 0.3f, deltaY * 0.3f);
+  } else if (middleMouseDown) {
+    editorCamera.pan(deltaX, deltaY);
   }
 }
 
@@ -988,7 +1255,7 @@ void EditorApp::buildEditorUI() {
       ImGui::Separator();
 
       if (ImGui::MenuItem("Exit", "Esc")) {
-        glfwSetWindowShouldClose(window, true);
+        window->requestClose();
       }
       ImGui::EndMenu();
     }
@@ -1250,294 +1517,6 @@ void EditorApp::setupDefaultDockLayout(ImGuiID dockspaceId) {
   ImGui::DockBuilderDockWindow("Viewport", dockViewport);
 
   ImGui::DockBuilderFinish(dockspaceId);
-}
-
-void EditorApp::mouseButtonCallback(GLFWwindow* window, int button, int action, int /*mods*/) {
-  auto* app = static_cast<EditorApp*>(glfwGetWindowUserPointer(window));
-  if (!app) return;
-
-  double xpos, ypos;
-  glfwGetCursorPos(window, &xpos, &ypos);
-
-  // Only guard PRESS events — releases must always be processed to prevent stuck state
-  bool guardPress = false;
-  if (action == GLFW_PRESS) {
-    bool imguiWants = ImGui::GetIO().WantCaptureMouse;
-    bool inFlyMode = app->editorCamera.getMode() == EditorCamera::Mode::Fly;
-    guardPress = imguiWants && !app->viewportHovered && !inFlyMode;
-  }
-
-  if (button == GLFW_MOUSE_BUTTON_RIGHT) {
-    if (action == GLFW_PRESS) {
-      if (guardPress) return;
-      app->rightMouseDown = true;
-      app->lastMouseX = static_cast<float>(xpos);
-      app->lastMouseY = static_cast<float>(ypos);
-      if (app->viewportHovered) {
-        app->editorCamera.beginFlyMode();
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-      }
-    } else if (action == GLFW_RELEASE) {
-      app->rightMouseDown = false;
-      if (app->editorCamera.getMode() == EditorCamera::Mode::Fly) {
-        app->editorCamera.endFlyMode();
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-      }
-    }
-  }
-
-  if (button == GLFW_MOUSE_BUTTON_MIDDLE) {
-    if (action == GLFW_PRESS) {
-      if (guardPress) return;
-      app->middleMouseDown = true;
-      app->lastMouseX = static_cast<float>(xpos);
-      app->lastMouseY = static_cast<float>(ypos);
-    } else if (action == GLFW_RELEASE) {
-      app->middleMouseDown = false;
-    }
-  }
-
-  if (button == GLFW_MOUSE_BUTTON_LEFT) {
-    if (action == GLFW_PRESS) {
-      if (guardPress) return;
-      app->leftMouseDown = true;
-      app->lastMouseX = static_cast<float>(xpos);
-      app->lastMouseY = static_cast<float>(ypos);
-      app->mousePressX = static_cast<float>(xpos);
-      app->mousePressY = static_cast<float>(ypos);
-
-      // Check gizmo hit first
-      if (app->viewportHovered && app->selectionManager.hasSelection() && app->pGizmoRenderer) {
-        auto* gizmo = app->pGizmoRenderer->getActiveGizmo();
-        auto* entity = app->selectionManager.getSelectedEntity(*app->pScene);
-        if (gizmo && entity) {
-          auto* tc = entity->getComponent<TransformComponent>();
-          if (tc) {
-            auto* vp = static_cast<ViewportPanel*>(app->viewportPanel.get());
-            ImVec2 vpPos = vp->getViewportScreenPos();
-            ImVec2 vpSize = vp->getViewportSize();
-            float localX = static_cast<float>(xpos) - vpPos.x;
-            float localY = static_cast<float>(ypos) - vpPos.y;
-            Ray ray = app->editorCamera.screenToWorldRay(localX, localY, vpSize.x, vpSize.y);
-
-            float dist = glm::length(app->editorCamera.getPosition() - tc->getTranslation());
-            float gizmoScale = dist * GizmoRenderer::SCALE_FACTOR;
-            GizmoAxis hitAxis = gizmo->hitTest(ray, tc->getTranslation(), tc->getRotation(), gizmoScale);
-            if (hitAxis != GizmoAxis::None) {
-              gizmo->beginInteraction(hitAxis, ray, tc->getTranslation(), tc->getRotation());
-              app->gizmoInteracting = true;
-            }
-          }
-        }
-      }
-    } else if (action == GLFW_RELEASE) {
-      // End gizmo interaction if active
-      if (app->gizmoInteracting && app->pGizmoRenderer) {
-        auto* gizmo = app->pGizmoRenderer->getActiveGizmo();
-        if (gizmo) gizmo->endInteraction();
-        app->gizmoInteracting = false;
-      } else {
-        // Click-to-select: if mouse barely moved, it's a click not a drag
-        float dx = static_cast<float>(xpos) - app->mousePressX;
-        float dy = static_cast<float>(ypos) - app->mousePressY;
-        if (std::sqrt(dx * dx + dy * dy) < 3.0f) {
-          app->pickEntityAtScreen(static_cast<float>(xpos), static_cast<float>(ypos));
-        }
-      }
-      app->leftMouseDown = false;
-    }
-  }
-}
-
-void EditorApp::cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
-  auto* app = static_cast<EditorApp*>(glfwGetWindowUserPointer(window));
-  if (!app) return;
-
-  float xposf = static_cast<float>(xpos);
-  float yposf = static_cast<float>(ypos);
-  float deltaX = xposf - app->lastMouseX;
-  float deltaY = app->lastMouseY - yposf; // Inverted Y
-
-  app->lastMouseX = xposf;
-  app->lastMouseY = yposf;
-
-  // Always process fly mode mouse look (cursor is captured)
-  if (app->rightMouseDown && app->editorCamera.getMode() == EditorCamera::Mode::Fly) {
-    app->editorCamera.flyMouseLook(deltaX, deltaY);
-    return;
-  }
-
-  // Handle gizmo interaction (takes priority over orbit/pan)
-  if (app->gizmoInteracting && app->leftMouseDown && app->pGizmoRenderer) {
-    auto* gizmo = app->pGizmoRenderer->getActiveGizmo();
-    auto* entity = app->selectionManager.getSelectedEntity(*app->pScene);
-    if (gizmo && entity) {
-      auto* tc = entity->getComponent<TransformComponent>();
-      if (tc) {
-        auto* vp = static_cast<ViewportPanel*>(app->viewportPanel.get());
-        ImVec2 vpPos = vp->getViewportScreenPos();
-        ImVec2 vpSize = vp->getViewportSize();
-        float localX = xposf - vpPos.x;
-        float localY = yposf - vpPos.y;
-        Ray ray = app->editorCamera.screenToWorldRay(localX, localY, vpSize.x, vpSize.y);
-
-        glm::vec3 delta = gizmo->updateInteraction(ray, tc->getTranslation(), tc->getRotation());
-
-        GizmoType type = app->pGizmoRenderer->getActiveGizmoType();
-        if (type == GizmoType::Translate) {
-          tc->setTranslation(tc->getTranslation() + delta);
-        } else if (type == GizmoType::Rotate) {
-          // delta encodes angle * axis
-          float angle = glm::length(delta);
-          if (angle > 1e-6f) {
-            glm::vec3 axis = delta / angle;
-            glm::quat rot = glm::angleAxis(angle, axis);
-            tc->setRotation(rot * tc->getRotation());
-          }
-        } else if (type == GizmoType::Scale) {
-          tc->setScale(tc->getScale() + delta);
-        }
-      }
-    }
-    return;
-  }
-
-  // Only orbit/pan when viewport is hovered
-  if (!app->viewportHovered) return;
-
-  if (app->leftMouseDown && app->editorCamera.getMode() == EditorCamera::Mode::Orbit) {
-    app->editorCamera.orbit(deltaX * 0.3f, deltaY * 0.3f);
-  } else if (app->middleMouseDown) {
-    app->editorCamera.pan(deltaX, deltaY);
-  }
-}
-
-void EditorApp::scrollCallback(GLFWwindow* window, double /*xoffset*/, double yoffset) {
-  auto* app = static_cast<EditorApp*>(glfwGetWindowUserPointer(window));
-  if (!app) return;
-
-  if (!app->viewportHovered) return;
-
-  app->editorCamera.zoom(static_cast<float>(yoffset));
-}
-
-void EditorApp::keyCallback(GLFWwindow* window, int key, int /*scancode*/, int action, int mods) {
-  auto* app = static_cast<EditorApp*>(glfwGetWindowUserPointer(window));
-  if (!app) return;
-
-  bool ctrl = (mods & GLFW_MOD_CONTROL) != 0;
-  bool shift = (mods & GLFW_MOD_SHIFT) != 0;
-
-  // Global shortcuts that work even when ImGui wants keyboard
-  if (action == GLFW_PRESS && ctrl) {
-    if (key == GLFW_KEY_S && shift) {
-      // Ctrl+Shift+S = Save As
-      std::string defaultPath = app->pScene->hasFilePath()
-        ? app->pScene->getCurrentFilePath()
-        : (std::filesystem::current_path() / "assets" / "scene.gltf").string();
-      std::strncpy(app->dialogPathBuf, defaultPath.c_str(), sizeof(app->dialogPathBuf) - 1);
-      app->dialogPathBuf[sizeof(app->dialogPathBuf) - 1] = '\0';
-      app->showSaveAsDialog = true;
-      return;
-    }
-    if (key == GLFW_KEY_S) {
-      app->saveScene();
-      return;
-    }
-    if (key == GLFW_KEY_O) {
-      std::string defaultPath = app->pScene->hasFilePath()
-        ? app->pScene->getCurrentFilePath()
-        : (std::filesystem::current_path() / "assets" / "scene.gltf").string();
-      std::strncpy(app->dialogPathBuf, defaultPath.c_str(), sizeof(app->dialogPathBuf) - 1);
-      app->dialogPathBuf[sizeof(app->dialogPathBuf) - 1] = '\0';
-      app->showOpenDialog = true;
-      return;
-    }
-    if (key == GLFW_KEY_N) {
-      app->logicalDevice->waitIdle();
-      app->pScene->getEntitiesMut().clear();
-      app->pScene->setCurrentFilePath("");
-      app->selectionManager.deselect();
-      app->setStatusMessage("New scene created");
-      return;
-    }
-    if (key == GLFW_KEY_D) {
-      app->selectionManager.deselect();
-      return;
-    }
-    if (key == GLFW_KEY_P) {
-      if (app->playModeActive)
-        app->stopPlayMode();
-      else
-        app->startPlayMode();
-      return;
-    }
-  }
-
-  if (ImGui::GetIO().WantCaptureKeyboard) return;
-
-  if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
-    // If in fly mode, exit fly mode first
-    if (app->editorCamera.getMode() == EditorCamera::Mode::Fly) {
-      app->editorCamera.endFlyMode();
-      app->rightMouseDown = false;
-      glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-      return;
-    }
-    glfwSetWindowShouldClose(window, true);
-  }
-
-  if (key == GLFW_KEY_F && action == GLFW_PRESS) {
-    auto* entity = app->selectionManager.getSelectedEntity(*app->pScene);
-    if (entity) {
-      auto* tc = entity->getComponent<TransformComponent>();
-      if (tc) {
-        app->editorCamera.focusOn(tc->getTranslation());
-        app->setStatusMessage("Focused on: " + entity->get_name());
-      }
-    }
-  }
-
-  if (key == GLFW_KEY_DELETE && action == GLFW_PRESS) {
-    int idx = app->selectionManager.getSelectedIndex();
-    auto& entities = app->pScene->getEntitiesMut();
-    if (idx >= 0 && idx < static_cast<int>(entities.size())) {
-      std::string name = entities[idx].get_name();
-      // Wait for GPU to finish using entity's mesh buffers before destroying
-      app->logicalDevice->waitIdle();
-      entities.erase(entities.begin() + idx);
-      app->selectionManager.deselect();
-      app->setStatusMessage("Deleted: " + name);
-    }
-  }
-
-  // W/E/R for gizmo mode switching (only when not in fly mode and no modifier keys)
-  if (action == GLFW_PRESS && app->editorCamera.getMode() != EditorCamera::Mode::Fly && !ctrl) {
-    if (key == GLFW_KEY_W) {
-      app->activeGizmoMode = GizmoType::Translate;
-      if (app->pGizmoRenderer) app->pGizmoRenderer->setActiveGizmo(GizmoType::Translate);
-      app->setStatusMessage("Gizmo: Translate");
-    }
-    if (key == GLFW_KEY_E) {
-      app->activeGizmoMode = GizmoType::Rotate;
-      if (app->pGizmoRenderer) app->pGizmoRenderer->setActiveGizmo(GizmoType::Rotate);
-      app->setStatusMessage("Gizmo: Rotate");
-    }
-    if (key == GLFW_KEY_R) {
-      app->activeGizmoMode = GizmoType::Scale;
-      if (app->pGizmoRenderer) app->pGizmoRenderer->setActiveGizmo(GizmoType::Scale);
-      app->setStatusMessage("Gizmo: Scale");
-    }
-  }
-}
-
-void EditorApp::dropCallback(GLFWwindow* window, int count, const char** paths) {
-  auto* app = static_cast<EditorApp*>(glfwGetWindowUserPointer(window));
-  if (!app || !app->assetBrowserPanel) return;
-
-  for (int i = 0; i < count; ++i) {
-    app->assetBrowserPanel->handleFileDrop(paths[i]);
-  }
 }
 
 void EditorApp::createEmptyEntity() {

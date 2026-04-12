@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -105,6 +107,11 @@ public:
    * Set camera FOV
    */
   void setFOV(float newFov) { this->fov = newFov; }
+
+  void setViewportSize(float width, float height) {
+    scrWidth = width;
+    scrHeight = std::max(height, 1.0f);
+  }
 
   void setMovementSpeed(float speed) { this->movementSpeed = speed; }
   float getMovementSpeed() const { return movementSpeed; }

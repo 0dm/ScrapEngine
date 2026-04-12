@@ -5,7 +5,6 @@
 #include <vulkan/vulkan_core.h>
 #include <vulkan/vulkan_raii.hpp>
 
-#include <GLFW/glfw3.h>
 #include <imgui.h>
 
 #include <string>
@@ -24,6 +23,7 @@
 #include <app/Instance.hpp>
 #include <app/PhysicalDevice.hpp>
 #include <app/LogicalDevice.hpp>
+#include <app/platform/PlatformWindow.hpp>
 #include <app/RenderSurface.hpp>
 #include <app/Renderer.hpp>
 #include <app/Scene.hpp>
@@ -88,7 +88,6 @@ public:
   const sauce::Scene& getScene() const { return *pScene; }
   SelectionManager& getSelectionManager() { return selectionManager; }
   EditorCamera& getEditorCamera() { return editorCamera; }
-  GLFWwindow* getWindow() { return window; }
   float getDeltaTime() const { return deltaTime; }
 
   void createEmptyEntity();
@@ -129,7 +128,10 @@ private:
   void mainLoop();
   void buildEditorUI();
   void setupDefaultDockLayout(ImGuiID dockspaceId);
-  void processInput();
+  void processInput(const sauce::platform::InputState& input);
+  void handleKeyboardShortcuts(const sauce::platform::InputState& input);
+  void handlePointerInput(const sauce::platform::InputState& input);
+  void handleDroppedFiles(const sauce::platform::InputState& input);
 
   bool saveSceneToZip(const std::string& zipPath,
                                const std::string& scenePath,
@@ -146,15 +148,7 @@ private:
   void recordEditorCommandBuffer(vk::raii::CommandBuffer& cmd, uint32_t imageIndex);
   void uploadMeshGPUResources();
   void pickEntityAtScreen(float windowX, float windowY);
-
-  static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
-  static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
-  static void cursorPosCallback(GLFWwindow* window, double xpos, double ypos);
-  static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset);
-  static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
-  static void dropCallback(GLFWwindow* window, int count, const char** paths);
-
-  GLFWwindow* window = nullptr;
+  std::unique_ptr<sauce::platform::PlatformWindow> window;
 
   std::chrono::steady_clock::time_point lastFrameTime = std::chrono::steady_clock::now();
   float deltaTime = 0.0f;

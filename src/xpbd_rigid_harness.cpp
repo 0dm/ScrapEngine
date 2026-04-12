@@ -16,6 +16,9 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <app/platform/ProjectRoot.hpp>
+
+#include <filesystem>
 #include <iostream>
 #include <limits>
 #include <optional>
@@ -692,6 +695,33 @@ std::vector<ContactDumpEntry> collectContactDump(
 
 } // namespace
 
+namespace {
+
+std::string resolveSceneFilePath(const std::string& path) {
+  namespace fs = std::filesystem;
+  std::error_code ec;
+  const fs::path p(path);
+  if (p.is_absolute()) {
+    if (fs::exists(p, ec)) {
+      return fs::weakly_canonical(p, ec).string();
+    }
+    return path;
+  }
+  if (fs::exists(p, ec)) {
+    return fs::weakly_canonical(fs::absolute(p), ec).string();
+  }
+  const fs::path root = sauce::platform::findProjectRootNearExecutable();
+  if (!root.empty()) {
+    const fs::path candidate = root / p;
+    if (fs::exists(candidate, ec)) {
+      return fs::weakly_canonical(candidate, ec).string();
+    }
+  }
+  return path;
+}
+
+} // namespace
+
 int main(int argc, char** argv) {
   const bool testStackStability =
       argc >= 2 && std::strcmp(argv[1], "--test-stack-stability") == 0;
@@ -749,6 +779,7 @@ int main(int argc, char** argv) {
       removeStep = std::atoi(argv[8]);
     }
   }
+  scenePath = resolveSceneFilePath(scenePath);
   const glm::vec3 wakeVelocity(wakeSpeed, 0.0f, 0.0f);
 
   float maxSettledBoxOverlap = 0.0f;

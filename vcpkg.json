@@ -2,17 +2,15 @@
   "name": "sauce-engine",
   "version": "0.1.0",
   "dependencies": [
-    "glfw3",
     "glm",
     "ktx",
     "nlohmann-json",
     "stb",
     "tinygltf",
     "tinyobjloader",
-    "boost-program-options",
     {
-      "name": "imgui",
-      "features": ["glfw-binding", "vulkan-binding", "docking-experimental"]
+      "name": "boost-program-options",
+      "platform": "osx & !ios"
     }
   ]
 }

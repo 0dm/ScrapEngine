@@ -5,12 +5,14 @@
 #include <vulkan/vulkan_core.h>
 #include <vulkan/vulkan_raii.hpp>
 
+#include <algorithm>
 #include <iostream>
+#include <span>
 
 namespace sauce {
 
 struct Instance {
-  Instance(const char** glfwExtensions, uint32_t glfwExtensionCount) {
+  Instance(std::span<const char* const> platformExtensions = {}) {
     constexpr vk::ApplicationInfo appInfo {
       .pApplicationName = "Vulkan Playground",
       .pEngineName = "No Engine",
@@ -18,7 +20,7 @@ struct Instance {
       .apiVersion = vk::ApiVersion14
     };
 
-    auto extensions = getRequiredExtensions(glfwExtensions, glfwExtensionCount);
+    auto extensions = getRequiredExtensions(platformExtensions);
     checkRequiredExtensions(extensions);
 
     auto validationLayers = getValidationLayers();
@@ -68,15 +70,24 @@ private:
     return {};
   }
 
-  static std::vector<const char *> getRequiredExtensions(const char** glfwExtensions, uint32_t glfwExtensionCount) {
-    std::vector<const char *> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+  static std::vector<const char *> getRequiredExtensions(std::span<const char* const> platformExtensions) {
+    std::vector<const char *> extensions;
+    extensions.reserve(platformExtensions.size() + 4);
+    extensions.push_back(vk::KHRSurfaceExtensionName);
+    extensions.insert(extensions.end(), platformExtensions.begin(), platformExtensions.end());
+
     if (enableValidationLayers) {
       extensions.push_back(vk::EXTDebugUtilsExtensionName);
     }
 
 #ifdef __APPLE__
+    extensions.push_back(vk::EXTMetalSurfaceExtensionName);
     extensions.push_back(vk::KHRPortabilityEnumerationExtensionName);
 #endif
+
+    std::erase_if(extensions, [](const char* extension) { return extension == nullptr; });
+    std::sort(extensions.begin(), extensions.end());
+    extensions.erase(std::unique(extensions.begin(), extensions.end()), extensions.end());
 
     return extensions;
   }

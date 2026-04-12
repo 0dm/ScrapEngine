@@ -8,7 +8,6 @@
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
 
-#include <GLFW/glfw3.h>
 #include <imgui.h>
 
 #include <glm/glm.hpp>
@@ -17,6 +16,7 @@
 #include <app/Instance.hpp>
 #include <app/PhysicalDevice.hpp>
 #include <app/LogicalDevice.hpp>
+#include <app/platform/PlatformWindow.hpp>
 #include <app/RenderSurface.hpp>
 #include <app/Camera.hpp>
 #include <app/Renderer.hpp>
@@ -41,13 +41,13 @@ public:
   }
 
   ~ModelViewerApp() {
-    logicalDevice->waitIdle();
-    glfwDestroyWindow(window);
-    glfwTerminate();
+    if (*logicalDevice != nullptr) {
+      logicalDevice->waitIdle();
+    }
   }
 
 private:
-  GLFWwindow* window;
+  std::unique_ptr<sauce::platform::PlatformWindow> window;
   std::string modelPath;
 
   std::unique_ptr<sauce::Instance> pInstance;
@@ -61,20 +61,19 @@ private:
   std::unique_ptr<sauce::ImGuiRenderer> pImGuiRenderer;
 
   void initWindow() {
-    glfwInit();
-
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-
-    window = glfwCreateWindow(WIDTH, HEIGHT, "Model Viewer", nullptr, nullptr);
+    window = sauce::platform::createPlatformWindow({
+        .title = "Model Viewer",
+        .width = WIDTH,
+        .height = HEIGHT,
+        .resizable = false,
+        .acceptFileDrops = false,
+    });
   }
 
   void initVulkan() {
-    uint32_t glfwExtensionsCount = 0;
-    const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionsCount);
-    pInstance = std::make_unique<sauce::Instance>(glfwExtensions, glfwExtensionsCount);
+    pInstance = std::make_unique<sauce::Instance>();
 
-    pRenderSurface = std::make_unique<sauce::RenderSurface>(*pInstance, window);
+    pRenderSurface = std::make_unique<sauce::RenderSurface>(*pInstance, window->getMetalLayerHandle());
 
     physicalDevice = { *pInstance };
     logicalDevice = { physicalDevice, *pRenderSurface };
@@ -96,7 +95,7 @@ private:
       .physicalDevice = physicalDevice,
       .logicalDevice = logicalDevice,
       .renderSurface = *pRenderSurface,
-      .window = window,
+      .platformView = *window,
     };
     pRenderer = std::make_unique<sauce::ModelViewerRenderer>(rendererCreateInfo);
 
@@ -106,7 +105,7 @@ private:
       .physicalDevice = physicalDevice,
       .logicalDevice = logicalDevice,
       .queueFamilyIndex = logicalDevice.getQueueIndex(),
-      .window = window,
+      .platformView = *window,
       .queue = pRenderer->getQueue(),
       .commandPool = pRenderer->getCommandPool(),
       .swapChain = pRenderer->getSwapChain(),
@@ -153,8 +152,8 @@ private:
     auto lastFrameTime = startTime;
     float fps = 0.0f;
 
-    while (!glfwWindowShouldClose(window)) {
-      glfwPollEvents();
+    while (!window->shouldClose()) {
+      window->pumpEvents();
 
       auto currentTime = std::chrono::high_resolution_clock::now();
       float time = std::chrono::duration<float>(currentTime - startTime).count();
@@ -173,7 +172,7 @@ private:
       float modelRotation = time * glm::radians(45.0f);
 
       // Build UI
-      pImGuiRenderer->newFrame();
+      pImGuiRenderer->newFrame(frameDelta);
       buildUI(fps);
 
       // Render frame

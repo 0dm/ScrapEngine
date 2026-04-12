@@ -7,9 +7,6 @@ target_include_directories(launcherLib PRIVATE
   ${PROJECT_SOURCE_DIR}/include
 )
 
-find_package(glfw3 CONFIG REQUIRED)
-target_link_libraries(launcherLib PRIVATE glfw)
-
 target_link_libraries(launcherLib
   PUBLIC
     Vulkan::Vulkan
@@ -17,4 +14,3 @@ target_link_libraries(launcherLib
 
 find_package(Boost REQUIRED COMPONENTS program_options)
 target_link_libraries(launcherLib PRIVATE Boost::program_options)
-

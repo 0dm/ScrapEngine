@@ -26,11 +26,11 @@ struct SwapChain {
       const sauce::PhysicalDevice& physicalDevice,
       const sauce::LogicalDevice& logicalDevice,
       const sauce::RenderSurface& renderSurface, 
-      GLFWwindow* window,
+      vk::Extent2D framebufferExtent,
       bool vsync = true
   ) {
     vk::SurfaceCapabilitiesKHR surfaceCapabilities = physicalDevice->getSurfaceCapabilitiesKHR(**renderSurface);
-    extent = chooseSwapExtent(surfaceCapabilities, window);
+    extent = chooseSwapExtent(surfaceCapabilities, framebufferExtent);
     surfaceFormat = chooseSwapSurfaceFormat(physicalDevice->getSurfaceFormatsKHR(**renderSurface));
   
     vk::SwapchainCreateInfoKHR swapChainCreateInfo {
@@ -159,18 +159,14 @@ private:
    * This should usually match window size, clamped to the surface's supported range
    * High-DPI (like apple retina) displays may have different framebuffer vs window coordinates
    */
-  static vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilities, GLFWwindow* window) {
+  static vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilities, vk::Extent2D framebufferExtent) {
     // if not max uint32, window manager already set the extent for us
     if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) 
       return capabilities.currentExtent;
 
-    // query actual framebuffer size
-    int width, height;
-    glfwGetFramebufferSize(window, &width, &height);
-
     return {
-      std::clamp<uint32_t>(width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
-      std::clamp<uint32_t>(height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height),
+      std::clamp(framebufferExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+      std::clamp(framebufferExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height),
     };
   }
 

@@ -13,7 +13,7 @@ ModelViewerRenderer::ModelViewerRenderer(const RendererCreateInfo& createInfo) {
       createInfo.physicalDevice,
       createInfo.logicalDevice,
       createInfo.renderSurface,
-      createInfo.window
+      createInfo.platformView.getFramebufferExtent()
   );
 
   createDescriptorSetLayout(createInfo.logicalDevice);

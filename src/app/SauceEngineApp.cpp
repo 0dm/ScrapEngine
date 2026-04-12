@@ -8,6 +8,7 @@
 #include <app/components/LightComponent.hpp>
 #include <app/Log.hpp>
 #include <app/PhysicsDemoSetup.hpp>
+#include <app/modeling/Material.hpp>
 #include <algorithm>
 #include <functional>
 #include <cstring>
@@ -22,6 +23,10 @@
 namespace sauce {
 
 namespace {
+
+bool isKeyPressed(const platform::InputState& input, platform::Key key) {
+  return input.keys[platform::keyIndex(key)];
+}
 
 float clampMagnitudeScale(const glm::vec3& value, float maxMagnitude) {
   const float lengthSq = glm::length2(value);
@@ -263,14 +268,15 @@ void SauceEngineApp::setPhysicsTickRate(double hz) {
 }
 
 SauceEngineApp::~SauceEngineApp() {
-    glfwDestroyWindow(window);
-    glfwTerminate();
+  shutdown();
 }
 
-void SauceEngineApp::run(const uint32_t width, const uint32_t height) {
+void SauceEngineApp::initialize(platform::PlatformView& platformView, uint32_t width, uint32_t height) {
+  this->platformView = &platformView;
   this->width = width;
   this->height = height;
-  initWindow();
+  cursorCaptured = false;
+  platformView.setCursorCaptured(cursorCaptured);
   initVulkan();
 
   defaultSceneSpinEnabled = sceneFile.empty();
@@ -301,8 +307,6 @@ void SauceEngineApp::run(const uint32_t width, const uint32_t height) {
   if (pCustomUIBuilder) {
     pCustomUIBuilder(*pImGuiComponentManager);
   }
-
-  mainLoop();
 }
 
 void SauceEngineApp::setCustomUIBuilder(std::function<void(sauce::ui::ImGuiComponentManager&)> builder) {
@@ -310,11 +314,13 @@ void SauceEngineApp::setCustomUIBuilder(std::function<void(sauce::ui::ImGuiCompo
 }
 
 void SauceEngineApp::initVulkan() {
-    uint32_t glfwExtensionsCount = 0;
-    const char **glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionsCount);
-    pInstance = std::make_unique<sauce::Instance>(glfwExtensions, glfwExtensionsCount);
+    if (!platformView) {
+      throw std::runtime_error("Platform view must be set before Vulkan initialization");
+    }
 
-    pRenderSurface = std::make_unique<sauce::RenderSurface>(*pInstance, window);
+    pInstance = std::make_unique<sauce::Instance>();
+
+    pRenderSurface = std::make_unique<sauce::RenderSurface>(*pInstance, platformView->getMetalLayerHandle());
 
     physicalDevice = { *pInstance };
     logicalDevice = { physicalDevice, *pRenderSurface };
@@ -330,7 +336,7 @@ void SauceEngineApp::initVulkan() {
       .physicalDevice = physicalDevice,
       .logicalDevice = logicalDevice,
       .renderSurface = *pRenderSurface,
-      .window = window,
+      .platformView = *platformView,
     };
 
     pRenderer = std::make_unique<sauce::Renderer>(rendererCreateInfo);
@@ -344,7 +350,7 @@ void SauceEngineApp::initVulkan() {
       .physicalDevice = physicalDevice,
       .logicalDevice = logicalDevice,
       .queueFamilyIndex = logicalDevice.getQueueIndex(),
-      .window = window,
+      .platformView = *platformView,
       .queue = pRenderer->getQueue(),
       .commandPool = pRenderer->getCommandPool(),
       .swapChain = pRenderer->getSwapChain(),
@@ -360,38 +366,41 @@ void SauceEngineApp::initVulkan() {
     pImGuiComponentManager->addComponent(std::make_unique<sauce::ui::DebugStatsWindow>());
   }
 
-void SauceEngineApp::initWindow() {
-    glfwInit();
-
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-
-    window = glfwCreateWindow(width, height, "Vulkan Playground", nullptr, nullptr);
-
-    glfwSetWindowUserPointer(window, this);
-    glfwSetCursorPosCallback(window, mouseCallback);
-    glfwSetMouseButtonCallback(window, mouseButtonCallback);
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-  }
-
 void SauceEngineApp::processInput(float deltaTime) {
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-      glfwSetWindowShouldClose(window, true);
+    if (!platformView) {
+      return;
+    }
 
-    if (glfwGetKey(window, GLFW_KEY_GRAVE_ACCENT) == GLFW_PRESS && !gravePressedLastFrame) {
+    const platform::InputState input = platformView->consumeInputState();
+    if (input.framebufferResized && pRenderer) {
+      pRenderer->setFramebufferResized();
+      const vk::Extent2D extent = platformView->getFramebufferExtent();
+      if (pScene && extent.width > 0 && extent.height > 0) {
+        pScene->getCameraRW().setViewportSize(
+            static_cast<float>(extent.width),
+            static_cast<float>(extent.height));
+      }
+    }
+
+    if (input.toggleCursorCaptureRequested ||
+        (isKeyPressed(input, platform::Key::GraveAccent) && !gravePressedLastFrame)) {
       cursorCaptured = !cursorCaptured;
-      glfwSetInputMode(window, GLFW_CURSOR, cursorCaptured ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+      platformView->setCursorCaptured(cursorCaptured);
       firstMouse = true;
     }
-    gravePressedLastFrame = glfwGetKey(window, GLFW_KEY_GRAVE_ACCENT) == GLFW_PRESS;
+    gravePressedLastFrame = isKeyPressed(input, platform::Key::GraveAccent);
 
-    const bool demoTriggerPressed = glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS;
+    if (cursorCaptured) {
+      endDrag();
+    }
+
+    const bool demoTriggerPressed = isKeyPressed(input, platform::Key::F);
     if (demoTriggerPressed && !demoTriggerPressedLastFrame && pScene) {
       startDropDemo();
     }
     demoTriggerPressedLastFrame = demoTriggerPressed;
 
-    const bool spacePressed = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
+    const bool spacePressed = isKeyPressed(input, platform::Key::Space);
     if (spacePressed && !spacePressedLastFrame) {
       applyClothImpulse();
     }
@@ -410,25 +419,41 @@ void SauceEngineApp::processInput(float deltaTime) {
     const bool cameraCollisionActive = cameraCollisionEnabled && cameraCollisionCooldown <= 0.0f;
 
     if (!cursorCaptured) {
+      const auto& leftMouse =
+          input.pointer.buttons[static_cast<std::size_t>(platform::MouseButton::Left)];
+      if (leftMouse.pressed && !ImGui::GetIO().WantCaptureMouse) {
+        beginDrag(input.pointer.x, input.pointer.y);
+      }
+      if (draggedEntity && (leftMouse.down || leftMouse.released ||
+                            input.pointer.deltaX != 0.0f || input.pointer.deltaY != 0.0f)) {
+        updateDrag(input.pointer.x, input.pointer.y);
+      }
+      if (leftMouse.released) {
+        endDrag();
+      }
+
       if (cameraCollisionActive) {
         applyCameraCollisionPush(previousCameraPosition, deltaTime);
       }
       return;
     }
 
-    const bool sprintHeld =
-        glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
-        glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS;
+    const bool sprintHeld = isKeyPressed(input, platform::Key::LeftShift) ||
+        isKeyPressed(input, platform::Key::RightShift);
     const float baseMovementSpeed = camera.getMovementSpeed();
     camera.setMovementSpeed(sprintHeld ? baseMovementSpeed * 3.0f : baseMovementSpeed);
 
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+    if (input.pointer.deltaX != 0.0f || input.pointer.deltaY != 0.0f) {
+      camera.processMouseMovement(input.pointer.deltaX, -input.pointer.deltaY);
+    }
+
+    if (isKeyPressed(input, platform::Key::W))
       camera.processDirection(Camera::Movement::FORWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    if (isKeyPressed(input, platform::Key::S))
       camera.processDirection(Camera::Movement::BACKWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+    if (isKeyPressed(input, platform::Key::A))
       camera.processDirection(Camera::Movement::LEFT, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+    if (isKeyPressed(input, platform::Key::D))
       camera.processDirection(Camera::Movement::RIGHT, deltaTime);
 
     camera.setMovementSpeed(baseMovementSpeed);
@@ -691,61 +716,6 @@ void SauceEngineApp::updateDropDemoForces() {
     physics_demo::applyForces(*pScene);
   }
 
-void SauceEngineApp::mouseCallback(GLFWwindow* window, double xposIn, double yposIn) {
-    auto* app = static_cast<SauceEngineApp*>(glfwGetWindowUserPointer(window));
-    if (!app) {
-      return;
-    }
-
-    if (!app->cursorCaptured) {
-      if (app->draggedEntity) {
-        app->updateDrag(xposIn, yposIn);
-      }
-      return;
-    }
-
-    float xpos = static_cast<float>(xposIn);
-    float ypos = static_cast<float>(yposIn);
-
-    if (app->firstMouse) {
-      app->lastX = xpos;
-      app->lastY = ypos;
-      app->firstMouse = false;
-    }
-
-    float xoffset = xpos - app->lastX;
-    float yoffset = app->lastY - ypos;
-
-    app->lastX = xpos;
-    app->lastY = ypos;
-
-    if (!app->pScene) {
-      return;
-    }
-
-    app->pScene->getCameraRW().processMouseMovement(xoffset, yoffset);
-  }
-
-void SauceEngineApp::mouseButtonCallback(GLFWwindow* window, int button, int action, int /*mods*/) {
-  auto* app = static_cast<SauceEngineApp*>(glfwGetWindowUserPointer(window));
-  if (!app || app->cursorCaptured) {
-    return;
-  }
-
-  if (button == GLFW_MOUSE_BUTTON_LEFT) {
-    if (action == GLFW_PRESS) {
-      if (ImGui::GetIO().WantCaptureMouse) {
-        return;
-      }
-      double mx, my;
-      glfwGetCursorPos(window, &mx, &my);
-      app->beginDrag(mx, my);
-    } else if (action == GLFW_RELEASE) {
-      app->endDrag();
-    }
-  }
-}
-
 void SauceEngineApp::applyClothImpulse() {
   if (!pScene) {
     return;
@@ -810,7 +780,18 @@ void SauceEngineApp::applyClothImpulse() {
   }
 }
 
-void SauceEngineApp::mainLoop() {
+void SauceEngineApp::tick(float deltaTime) {
+  if (!pRenderer || !pScene || !pSolver || !pImGuiRenderer) {
+    return;
+  }
+
+  frameDelta = std::max(deltaTime, 1e-4f);
+
+  const vk::Extent2D extent = platformView ? platformView->getFramebufferExtent() : vk::Extent2D{};
+  if (extent.width == 0 || extent.height == 0) {
+    return;
+  }
+
   auto& clothPhysicalDevice =
       const_cast<vk::raii::PhysicalDevice&>(*physicalDevice);
   auto& clothCommandPool =
@@ -818,166 +799,158 @@ void SauceEngineApp::mainLoop() {
   auto& clothQueue =
       const_cast<vk::raii::Queue&>(pRenderer->getQueue());
 
-  while (!glfwWindowShouldClose(window)) {
-    auto currentFrameTime = std::chrono::steady_clock::now();
-    deltaFrame = std::chrono::duration<float>(currentFrameTime - lastFrameTime).count();
-    lastFrameTime = currentFrameTime;
+  processInput(deltaTime);
+  updateDefaultSceneSpin(deltaTime);
+  syncRigidBodiesToTransforms();
 
-    glfwPollEvents();
-    processInput(deltaFrame);
-    updateDefaultSceneSpin(static_cast<float>(deltaFrame));
-    syncRigidBodiesToTransforms();
+  pImGuiRenderer->newFrame(deltaTime);
+  buildExampleUI();
 
-    pImGuiRenderer->newFrame();
-    buildExampleUI();
+  auto rigidBodies = collectRigidBodies();
+  const size_t dynamicRigidBodyCount = static_cast<size_t>(std::count_if(
+      rigidBodies.begin(),
+      rigidBodies.end(),
+      [](const RigidBodyComponent* rigidBody) {
+        return rigidBody && rigidBody->canBeDynamic() && rigidBody->isCollisionEnabled();
+      }));
+  const auto solverTuning = physics_demo::selectRigidSolverTuning(dynamicRigidBodyCount);
+  pSolver->solverIterations = solverTuning.solverIterations;
+  pSolver->rigidSubsteps = solverTuning.rigidSubsteps;
+  const float physicsDt = 1.0f / static_cast<float>(physicsTickRate);
 
-    auto rigidBodies = collectRigidBodies();
-    const size_t dynamicRigidBodyCount = static_cast<size_t>(std::count_if(
-        rigidBodies.begin(),
-        rigidBodies.end(),
-        [](const RigidBodyComponent* rigidBody) {
-          return rigidBody && rigidBody->canBeDynamic() && rigidBody->isCollisionEnabled();
-        }));
-    const auto solverTuning = physics_demo::selectRigidSolverTuning(dynamicRigidBodyCount);
-    pSolver->solverIterations = solverTuning.solverIterations;
-    pSolver->rigidSubsteps = solverTuning.rigidSubsteps;
-    const float physicsDt = 1.0f / static_cast<float>(physicsTickRate);
+  constexpr int kMaxPhysicsStepsPerFrame = 8;
+  constexpr float kMaxFrameDtFactor = 3.0f;
+  const float clampedFrame = std::min(deltaTime, physicsDt * kMaxFrameDtFactor);
+  deltaUpdate += clampedFrame;
+  const float maxCarry = physicsDt * static_cast<float>(kMaxPhysicsStepsPerFrame);
+  if (deltaUpdate > maxCarry) {
+    deltaUpdate = maxCarry;
+  }
 
-    constexpr int kMaxPhysicsStepsPerFrame = 8;
-    constexpr float kMaxFrameDtFactor = 3.0f;
-    const float clampedFrame =
-        std::min(static_cast<float>(deltaFrame), physicsDt * kMaxFrameDtFactor);
-    deltaUpdate += clampedFrame;
-    const float maxCarry = physicsDt * static_cast<float>(kMaxPhysicsStepsPerFrame);
-    if (deltaUpdate > maxCarry) {
-      deltaUpdate = maxCarry;
-    }
+  if (deltaUpdate > 1.0f) {
+    deltaUpdate = physicsDt;
+  }
 
-    if (deltaUpdate > 1.0f) {
-      deltaUpdate = physicsDt;
-    }
+  while (deltaUpdate >= physicsDt) {
+    updateDropDemoForces();
 
-    while (deltaUpdate >= physicsDt) {
-      updateDropDemoForces();
-
-      if (draggedEntity) {
-        auto* dragRB = draggedEntity->getComponent<RigidBodyComponent>();
-        if (dragRB) {
-          pSolver->dragBody = dragRB;
-          if (dragRB->isSleeping()) {
-            dragRB->wake();
-          }
-
-          const glm::vec3 toTarget = dragTargetPosition - dragRB->getPosition();
-          const glm::vec3 gravDir = pSolver->gravityDirection;
-          const float intentSpeed = glm::length(dragSmoothedVelocity);
-          const float wreckingBlend = glm::smoothstep(1.0f, 4.5f, intentSpeed);
-          const float targetLag = glm::length(toTarget);
-          const float lagBlend = glm::smoothstep(0.08f, 0.45f, targetLag);
-          const glm::vec3 currentVelocity = dragRB->getVelocity();
-          const glm::vec3 desiredVelocity =
-              dragSmoothedVelocity * 0.85f + toTarget * 7.5f;
-          const float verticalSpeed = glm::dot(desiredVelocity, gravDir);
-          const glm::vec3 desiredVerticalVelocity = verticalSpeed * gravDir;
-          const glm::vec3 desiredLateralVelocity = desiredVelocity - desiredVerticalVelocity;
-
-          constexpr float kGentleLateralSpeed = 2.8f;
-          constexpr float kGentleCatchupLateralSpeed = 5.0f;
-          constexpr float kGentleDownwardSpeed = 1.4f;
-          constexpr float kGentleCatchupDownwardSpeed = 2.4f;
-          constexpr float kGentleUpwardSpeed = 1.8f;
-          constexpr float kGentleCatchupUpwardSpeed = 2.8f;
-          constexpr float kWreckingLateralSpeed = 9.0f;
-          constexpr float kWreckingDownwardSpeed = 6.0f;
-          constexpr float kWreckingUpwardSpeed = 7.0f;
-          const auto blendDragLimit = [&](float gentle, float catchup, float wrecking) {
-            return std::lerp(std::lerp(gentle, catchup, lagBlend), wrecking, wreckingBlend);
-          };
-
-          const float lateralSpeedLimit = blendDragLimit(
-              kGentleLateralSpeed, kGentleCatchupLateralSpeed, kWreckingLateralSpeed);
-          const float downwardSpeedLimit = blendDragLimit(
-              kGentleDownwardSpeed, kGentleCatchupDownwardSpeed, kWreckingDownwardSpeed);
-          const float upwardSpeedLimit = blendDragLimit(
-              kGentleUpwardSpeed, kGentleCatchupUpwardSpeed, kWreckingUpwardSpeed);
-
-          glm::vec3 clampedDesiredLateralVelocity = desiredLateralVelocity;
-          clampedDesiredLateralVelocity *=
-              clampMagnitudeScale(desiredLateralVelocity, lateralSpeedLimit);
-
-          glm::vec3 clampedDesiredVerticalVelocity = desiredVerticalVelocity;
-          if (verticalSpeed > 0.0f) {
-            clampedDesiredVerticalVelocity *=
-                clampMagnitudeScale(desiredVerticalVelocity, downwardSpeedLimit);
-          } else {
-            clampedDesiredVerticalVelocity *=
-                clampMagnitudeScale(desiredVerticalVelocity, upwardSpeedLimit);
-          }
-
-          const glm::vec3 clampedDesiredVelocity =
-              clampedDesiredLateralVelocity + clampedDesiredVerticalVelocity;
-          const glm::vec3 desiredAcceleration =
-              (clampedDesiredVelocity - currentVelocity) / std::max(physicsDt, 1e-4f);
-          const float verticalAcceleration = glm::dot(desiredAcceleration, gravDir);
-          const glm::vec3 desiredVerticalAcceleration = verticalAcceleration * gravDir;
-          const glm::vec3 desiredLateralAcceleration =
-              desiredAcceleration - desiredVerticalAcceleration;
-
-          constexpr float kGentleLateralAcceleration = 22.0f;
-          constexpr float kGentleCatchupLateralAcceleration = 44.0f;
-          constexpr float kGentleDownwardAcceleration = 14.0f;
-          constexpr float kGentleCatchupDownwardAcceleration = 24.0f;
-          constexpr float kGentleUpwardAcceleration = 16.0f;
-          constexpr float kGentleCatchupUpwardAcceleration = 28.0f;
-          constexpr float kWreckingLateralAcceleration = 70.0f;
-          constexpr float kWreckingDownwardAcceleration = 52.0f;
-          constexpr float kWreckingUpwardAcceleration = 58.0f;
-
-          const float lateralAccelerationLimit = blendDragLimit(
-              kGentleLateralAcceleration,
-              kGentleCatchupLateralAcceleration,
-              kWreckingLateralAcceleration);
-          const float downwardAccelerationLimit = blendDragLimit(
-              kGentleDownwardAcceleration,
-              kGentleCatchupDownwardAcceleration,
-              kWreckingDownwardAcceleration);
-          const float upwardAccelerationLimit = blendDragLimit(
-              kGentleUpwardAcceleration,
-              kGentleCatchupUpwardAcceleration,
-              kWreckingUpwardAcceleration);
-
-          glm::vec3 clampedLateralAcceleration = desiredLateralAcceleration;
-          clampedLateralAcceleration *=
-              clampMagnitudeScale(desiredLateralAcceleration, lateralAccelerationLimit);
-
-          glm::vec3 clampedVerticalAcceleration = desiredVerticalAcceleration;
-          if (verticalAcceleration > 0.0f) {
-            clampedVerticalAcceleration *=
-                clampMagnitudeScale(desiredVerticalAcceleration, downwardAccelerationLimit);
-          } else {
-            clampedVerticalAcceleration *=
-                clampMagnitudeScale(desiredVerticalAcceleration, upwardAccelerationLimit);
-          }
-
-          const glm::vec3 driveVelocity =
-              currentVelocity + (clampedLateralAcceleration + clampedVerticalAcceleration) * physicsDt;
-          dragRB->setVelocity(driveVelocity);
-          dragRB->setAngularVelocity(dragRB->getAngularVelocity() * 0.15f);
+    if (draggedEntity) {
+      auto* dragRB = draggedEntity->getComponent<RigidBodyComponent>();
+      if (dragRB) {
+        pSolver->dragBody = dragRB;
+        if (dragRB->isSleeping()) {
+          dragRB->wake();
         }
-      }
 
-      if (!draggedEntity || !draggedEntity->getComponent<RigidBodyComponent>()) {
-        pSolver->dragBody = nullptr;
-      }
+        const glm::vec3 toTarget = dragTargetPosition - dragRB->getPosition();
+        const glm::vec3 gravDir = pSolver->gravityDirection;
+        const float intentSpeed = glm::length(dragSmoothedVelocity);
+        const float wreckingBlend = glm::smoothstep(1.0f, 4.5f, intentSpeed);
+        const float targetLag = glm::length(toTarget);
+        const float lagBlend = glm::smoothstep(0.08f, 0.45f, targetLag);
+        const glm::vec3 currentVelocity = dragRB->getVelocity();
+        const glm::vec3 desiredVelocity = dragSmoothedVelocity * 0.85f + toTarget * 7.5f;
+        const float verticalSpeed = glm::dot(desiredVelocity, gravDir);
+        const glm::vec3 desiredVerticalVelocity = verticalSpeed * gravDir;
+        const glm::vec3 desiredLateralVelocity = desiredVelocity - desiredVerticalVelocity;
 
-      const bool traceDragStep =
-          dragTraceEntity && (draggedEntity == dragTraceEntity || dragTraceReleaseStepsRemaining > 0);
-      if (traceDragStep) {
-        logDragTraceSnapshot("pre", physicsDt);
-      }
+        constexpr float kGentleLateralSpeed = 2.8f;
+        constexpr float kGentleCatchupLateralSpeed = 5.0f;
+        constexpr float kGentleDownwardSpeed = 1.4f;
+        constexpr float kGentleCatchupDownwardSpeed = 2.4f;
+        constexpr float kGentleUpwardSpeed = 1.8f;
+        constexpr float kGentleCatchupUpwardSpeed = 2.8f;
+        constexpr float kWreckingLateralSpeed = 9.0f;
+        constexpr float kWreckingDownwardSpeed = 6.0f;
+        constexpr float kWreckingUpwardSpeed = 7.0f;
+        const auto blendDragLimit = [&](float gentle, float catchup, float wrecking) {
+          return std::lerp(std::lerp(gentle, catchup, lagBlend), wrecking, wreckingBlend);
+        };
 
-      pSolver->solvePositions(rigidBodies, physicsDt);
-      if (traceDragStep) {
+        const float lateralSpeedLimit =
+            blendDragLimit(kGentleLateralSpeed, kGentleCatchupLateralSpeed, kWreckingLateralSpeed);
+        const float downwardSpeedLimit =
+            blendDragLimit(kGentleDownwardSpeed, kGentleCatchupDownwardSpeed, kWreckingDownwardSpeed);
+        const float upwardSpeedLimit =
+            blendDragLimit(kGentleUpwardSpeed, kGentleCatchupUpwardSpeed, kWreckingUpwardSpeed);
+
+        glm::vec3 clampedDesiredLateralVelocity = desiredLateralVelocity;
+        clampedDesiredLateralVelocity *=
+            clampMagnitudeScale(desiredLateralVelocity, lateralSpeedLimit);
+
+        glm::vec3 clampedDesiredVerticalVelocity = desiredVerticalVelocity;
+        if (verticalSpeed > 0.0f) {
+          clampedDesiredVerticalVelocity *=
+              clampMagnitudeScale(desiredVerticalVelocity, downwardSpeedLimit);
+        } else {
+          clampedDesiredVerticalVelocity *=
+              clampMagnitudeScale(desiredVerticalVelocity, upwardSpeedLimit);
+        }
+
+        const glm::vec3 clampedDesiredVelocity =
+            clampedDesiredLateralVelocity + clampedDesiredVerticalVelocity;
+        const glm::vec3 desiredAcceleration =
+            (clampedDesiredVelocity - currentVelocity) / std::max(physicsDt, 1e-4f);
+        const float verticalAcceleration = glm::dot(desiredAcceleration, gravDir);
+        const glm::vec3 desiredVerticalAcceleration = verticalAcceleration * gravDir;
+        const glm::vec3 desiredLateralAcceleration =
+            desiredAcceleration - desiredVerticalAcceleration;
+
+        constexpr float kGentleLateralAcceleration = 22.0f;
+        constexpr float kGentleCatchupLateralAcceleration = 44.0f;
+        constexpr float kGentleDownwardAcceleration = 14.0f;
+        constexpr float kGentleCatchupDownwardAcceleration = 24.0f;
+        constexpr float kGentleUpwardAcceleration = 16.0f;
+        constexpr float kGentleCatchupUpwardAcceleration = 28.0f;
+        constexpr float kWreckingLateralAcceleration = 70.0f;
+        constexpr float kWreckingDownwardAcceleration = 52.0f;
+        constexpr float kWreckingUpwardAcceleration = 58.0f;
+
+        const float lateralAccelerationLimit = blendDragLimit(
+            kGentleLateralAcceleration,
+            kGentleCatchupLateralAcceleration,
+            kWreckingLateralAcceleration);
+        const float downwardAccelerationLimit = blendDragLimit(
+            kGentleDownwardAcceleration,
+            kGentleCatchupDownwardAcceleration,
+            kWreckingDownwardAcceleration);
+        const float upwardAccelerationLimit = blendDragLimit(
+            kGentleUpwardAcceleration,
+            kGentleCatchupUpwardAcceleration,
+            kWreckingUpwardAcceleration);
+
+        glm::vec3 clampedLateralAcceleration = desiredLateralAcceleration;
+        clampedLateralAcceleration *=
+            clampMagnitudeScale(desiredLateralAcceleration, lateralAccelerationLimit);
+
+        glm::vec3 clampedVerticalAcceleration = desiredVerticalAcceleration;
+        if (verticalAcceleration > 0.0f) {
+          clampedVerticalAcceleration *=
+              clampMagnitudeScale(desiredVerticalAcceleration, downwardAccelerationLimit);
+        } else {
+          clampedVerticalAcceleration *=
+              clampMagnitudeScale(desiredVerticalAcceleration, upwardAccelerationLimit);
+        }
+
+        const glm::vec3 driveVelocity =
+            currentVelocity + (clampedLateralAcceleration + clampedVerticalAcceleration) * physicsDt;
+        dragRB->setVelocity(driveVelocity);
+        dragRB->setAngularVelocity(dragRB->getAngularVelocity() * 0.15f);
+      }
+    }
+
+    if (!draggedEntity || !draggedEntity->getComponent<RigidBodyComponent>()) {
+      pSolver->dragBody = nullptr;
+    }
+
+    const bool traceDragStep =
+        dragTraceEntity && (draggedEntity == dragTraceEntity || dragTraceReleaseStepsRemaining > 0);
+    if (traceDragStep) {
+      logDragTraceSnapshot("pre", physicsDt);
+    }
+
+    pSolver->solvePositions(rigidBodies, physicsDt);
+    if (traceDragStep) {
         logDragTraceSnapshot("post", physicsDt);
         ++dragTraceStep;
         if (draggedEntity != dragTraceEntity && dragTraceReleaseStepsRemaining > 0) {
@@ -1068,10 +1041,27 @@ void SauceEngineApp::mainLoop() {
       }
     }
 
-    pRenderer->drawFrame(logicalDevice, *pScene, pImGuiRenderer.get());
+  pRenderer->drawFrame(logicalDevice, *pScene, pImGuiRenderer.get());
+}
+
+void SauceEngineApp::shutdown() {
+  if (*logicalDevice != nullptr) {
+    logicalDevice->waitIdle();
   }
 
-  logicalDevice->waitIdle();
+  pImGuiRenderer.reset();
+  pRenderer.reset();
+  // Static material layout is created during Renderer construction; if the Renderer ctor throws
+  // after that point, ~Renderer never runs and the layout would outlive the device (abort on exit).
+  modeling::Material::cleanup();
+  pSolver.reset();
+  pScene.reset();
+  // Device must be destroyed before surface/instance (Vulkan teardown order).
+  logicalDevice = nullptr;
+  physicalDevice = nullptr;
+  pRenderSurface.reset();
+  pInstance.reset();
+  platformView = nullptr;
 }
 
 void SauceEngineApp::buildExampleUI() {
@@ -1508,7 +1498,7 @@ void SauceEngineApp::updateDrag(double mouseX, double mouseY) {
 
     glm::vec3 newPos = hitOnPlane + dragOffset;
 
-    const float dt = std::max(static_cast<float>(deltaFrame), 1e-4f);
+    const float dt = frameDelta;
     const glm::vec3 frameVel = (newPos - dragTargetPosition) / dt;
     constexpr float kSmoothFactor = 0.3f;
     dragSmoothedVelocity = glm::mix(dragSmoothedVelocity, frameVel, kSmoothFactor);

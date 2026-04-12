@@ -2,7 +2,6 @@
 #include <app/SwapChain.hpp>
 
 #include <imgui.h>
-#include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
 
 #include <stdexcept>
@@ -10,7 +9,7 @@
 namespace sauce {
 
 ImGuiRenderer::ImGuiRenderer(const ImGuiRendererCreateInfo& createInfo) {
-  window = createInfo.window;
+  platformView = &createInfo.platformView;
   device = &*createInfo.logicalDevice;
 
   createDescriptorPool(createInfo.logicalDevice);
@@ -21,7 +20,6 @@ ImGuiRenderer::ImGuiRenderer(const ImGuiRendererCreateInfo& createInfo) {
 ImGuiRenderer::~ImGuiRenderer() {
   if (imguiContext) {
     ImGui_ImplVulkan_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext(imguiContext);
   }
 }
@@ -59,9 +57,8 @@ void ImGuiRenderer::initImGui(const ImGuiRendererCreateInfo& createInfo) {
 
   // Setup ImGui style
   ImGui::StyleColorsDark();
-
-  // Initialize GLFW backend
-  ImGui_ImplGlfw_InitForVulkan(window, true);
+  ImGuiIO& io = ImGui::GetIO();
+  io.BackendPlatformName = "sauce_platform";
 
   // Initialize Vulkan backend with dynamic rendering
   VkFormat colorAttachmentFormat = static_cast<VkFormat>(createInfo.swapChainFormat);
@@ -122,13 +119,15 @@ void ImGuiRenderer::uploadFonts(const ImGuiRendererCreateInfo& createInfo) {
   ImGui_ImplVulkan_DestroyFontsTexture();
 }
 
-void ImGuiRenderer::newFrame() {
+void ImGuiRenderer::newFrame(float deltaTime) {
+  ImGuiIO& io = ImGui::GetIO();
+  platformView->prepareImGuiFrame(io, deltaTime);
   ImGui_ImplVulkan_NewFrame();
-  ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
 }
 
 void ImGuiRenderer::render(const vk::raii::CommandBuffer& commandBuffer, uint32_t imageIndex) {
+  (void)imageIndex;
   ImGui::Render();
   ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), *commandBuffer);
 }

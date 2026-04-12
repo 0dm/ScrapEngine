@@ -3,10 +3,10 @@
 #define VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
-#include <GLFW/glfw3.h>
 
 #include <app/LogicalDevice.hpp>
 #include <app/PhysicalDevice.hpp>
+#include <app/platform/PlatformView.hpp>
 
 struct ImGuiContext;
 
@@ -19,7 +19,7 @@ struct ImGuiRendererCreateInfo {
   const sauce::PhysicalDevice& physicalDevice;
   const sauce::LogicalDevice& logicalDevice;
   uint32_t queueFamilyIndex;
-  GLFWwindow* window;
+  sauce::platform::PlatformView& platformView;
   const vk::raii::Queue& queue;
   const vk::raii::CommandPool& commandPool;
   const sauce::SwapChain& swapChain;
@@ -33,7 +33,7 @@ public:
   explicit ImGuiRenderer(const ImGuiRendererCreateInfo& createInfo);
   ~ImGuiRenderer();
 
-  void newFrame();
+  void newFrame(float deltaTime);
   void render(const vk::raii::CommandBuffer& commandBuffer, uint32_t imageIndex);
 
 private:
@@ -43,7 +43,7 @@ private:
 
   ImGuiContext* imguiContext = nullptr;
   vk::raii::DescriptorPool imguiDescriptorPool = nullptr;
-  GLFWwindow* window = nullptr;
+  sauce::platform::PlatformView* platformView = nullptr;
   const vk::raii::Device* device = nullptr;
 };
 
