@@ -19,6 +19,8 @@ public:
   void pumpEvents() override;
   bool shouldClose() const override;
   void requestClose() override;
+  void setWindowTitle(const std::string& title) override;
+  void setWindowSize(uint32_t width, uint32_t height) override;
   InputState consumeInputState() override;
   void prepareImGuiFrame(ImGuiIO& io, float deltaTime) override;
   void setCursorCaptured(bool captured) override;

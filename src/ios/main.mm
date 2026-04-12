@@ -44,6 +44,12 @@ public:
     inputState.closeRequested = true;
   }
 
+  void setWindowTitle(const std::string&) override {}
+
+  void setWindowSize(uint32_t width, uint32_t height) override {
+    updateDrawableSize(CGSizeMake(width, height), nativeView.contentScaleFactor);
+  }
+
   sauce::platform::InputState consumeInputState() override {
     sauce::platform::InputState snapshot = inputState;
     inputState.keyPressed.fill(false);

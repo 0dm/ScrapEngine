@@ -9,6 +9,10 @@
     "tinygltf",
     "tinyobjloader",
     {
+      "name": "curl",
+      "platform": "osx & !ios"
+    },
+    {
       "name": "boost-program-options",
       "platform": "osx & !ios"
     }

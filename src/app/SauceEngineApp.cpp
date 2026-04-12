@@ -10,6 +10,8 @@
 #include <app/PhysicsDemoSetup.hpp>
 #include <app/modeling/Material.hpp>
 #include <algorithm>
+#include <cctype>
+#include <filesystem>
 #include <functional>
 #include <cstring>
 #include <cmath>
@@ -24,8 +26,18 @@ namespace sauce {
 
 namespace {
 
+constexpr const char* kLauncherWindowTitle = "SauceEngine Launcher";
+constexpr const char* kEngineWindowTitle = "SauceEngine";
+
 bool isKeyPressed(const platform::InputState& input, platform::Key key) {
   return input.keys[platform::keyIndex(key)];
+}
+
+std::string lowercase(std::string value) {
+  std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
+    return static_cast<char>(std::tolower(ch));
+  });
+  return value;
 }
 
 float clampMagnitudeScale(const glm::vec3& value, float maxMagnitude) {
@@ -255,10 +267,70 @@ SceneBounds computeSceneBounds(const Scene& scene) {
   return bounds;
 }
 
+std::array<float, 3> defaultModelRotationDegrees() {
+  return {
+      static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_X_DEGREES),
+      static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_Y_DEGREES),
+      static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_Z_DEGREES)};
+}
+
+bool pathLooksLikeAuthoredScene(const std::string& scenePath) {
+  if (scenePath.empty()) {
+    return false;
+  }
+
+  const std::string normalizedPath = lowercase(std::filesystem::path(scenePath).generic_string());
+  return normalizedPath.find("/testscene/") != std::string::npos ||
+         normalizedPath.ends_with("/testscene.gltf") ||
+         normalizedPath.ends_with("/testscene.glb");
+}
+
+std::array<float, 3> resolvedModelRotationDegrees(
+    const std::string& scenePath,
+    bool explicitOverride,
+    const std::array<float, 3>& configuredDegrees) {
+  if (explicitOverride) {
+    return configuredDegrees;
+  }
+  return pathLooksLikeAuthoredScene(scenePath) ? std::array<float, 3>{0.0f, 0.0f, 0.0f}
+                                               : configuredDegrees;
+}
+
+void applyGlobalModelRotation(Scene& scene, const std::array<float, 3>& rotationDegrees) {
+  if (std::abs(rotationDegrees[0]) <= 0.001f &&
+      std::abs(rotationDegrees[1]) <= 0.001f &&
+      std::abs(rotationDegrees[2]) <= 0.001f) {
+    return;
+  }
+
+  const glm::quat rotateX =
+      glm::angleAxis(glm::radians(rotationDegrees[0]), glm::vec3(1.0f, 0.0f, 0.0f));
+  const glm::quat rotateY =
+      glm::angleAxis(glm::radians(rotationDegrees[1]), glm::vec3(0.0f, 1.0f, 0.0f));
+  const glm::quat rotateZ =
+      glm::angleAxis(glm::radians(rotationDegrees[2]), glm::vec3(0.0f, 0.0f, 1.0f));
+  const glm::quat rotation = glm::normalize(rotateZ * rotateY * rotateX);
+
+  for (auto& entity : scene.getEntitiesMut()) {
+    if (auto* transform = entity.getComponent<TransformComponent>()) {
+      transform->setTranslation(rotation * transform->getTranslation());
+      transform->setRotation(rotation * transform->getRotation());
+    }
+
+    if (auto* rigidBody = entity.getComponent<RigidBodyComponent>()) {
+      rigidBody->setPosition(rotation * rigidBody->getPosition());
+      rigidBody->setOrientation(rotation * rigidBody->getOrientation());
+      rigidBody->setVelocity(rotation * rigidBody->getVelocity());
+      rigidBody->setAngularVelocity(rotation * rigidBody->getAngularVelocity());
+    }
+  }
+}
+
 } // namespace
 
 SauceEngineApp::SauceEngineApp() {
   pImGuiComponentManager = std::make_unique<sauce::ui::ImGuiComponentManager>();
+  pLauncher = std::make_unique<sauce::launcher::AppLauncher>();
 }
 
 void SauceEngineApp::setPhysicsTickRate(double hz) {
@@ -275,35 +347,30 @@ void SauceEngineApp::initialize(platform::PlatformView& platformView, uint32_t w
   this->platformView = &platformView;
   this->width = width;
   this->height = height;
-  cursorCaptured = false;
-  platformView.setCursorCaptured(cursorCaptured);
+  setCursorCapture(false);
   initVulkan();
 
-  defaultSceneSpinEnabled = sceneFile.empty();
-  if (sceneFile.empty()) {
-    sceneFile = "assets/models/Cube.gltf";
-  }
-
-  if (pScene) {
-    if (pScene->loadFromFile(sceneFile) && !pScene->getEntities().empty()) {
-      if (defaultSceneSpinEnabled) {
-        frameCameraToScene();
-        setupDefaultSceneSpin();
-      } else {
-        frameLoadedSceneCamera();
-      }
-      uploadMeshGPUResources();
-      setupSceneRenderer();
+  if (launcherActive) {
+    platformView.setWindowTitle(kLauncherWindowTitle);
+    pLauncher->initialize(
+        width,
+        height,
+        sceneFile,
+        iblFile,
+        polyHavenModelId,
+        polyHavenModelResolution,
+        polyHavenHdriId,
+        polyHavenHdriResolution);
+  } else {
+    std::string remoteError;
+    if (!resolveConfiguredRemoteAssets(remoteError)) {
+      throw std::runtime_error(remoteError);
+    }
+    if (!loadConfiguredScene()) {
+      throw std::runtime_error("Failed to load scene: " + sceneFile);
     }
   }
 
-  // Load IBL if specified
-  if (!iblFile.empty() && pRenderer) {
-    pRenderer->loadIBL(iblFile);
-  }
-
-
-  // Call custom UI builder after ImGui is initialized
   if (pCustomUIBuilder) {
     pCustomUIBuilder(*pImGuiComponentManager);
   }
@@ -384,11 +451,14 @@ void SauceEngineApp::processInput(float deltaTime) {
 
     if (input.toggleCursorCaptureRequested ||
         (isKeyPressed(input, platform::Key::GraveAccent) && !gravePressedLastFrame)) {
-      cursorCaptured = !cursorCaptured;
-      platformView->setCursorCaptured(cursorCaptured);
-      firstMouse = true;
+      setCursorCapture(!cursorCaptured);
     }
     gravePressedLastFrame = isKeyPressed(input, platform::Key::GraveAccent);
+
+    if (launcherActive) {
+      endDrag();
+      return;
+    }
 
     if (cursorCaptured) {
       endDrag();
@@ -800,11 +870,22 @@ void SauceEngineApp::tick(float deltaTime) {
       const_cast<vk::raii::Queue&>(pRenderer->getQueue());
 
   processInput(deltaTime);
-  updateDefaultSceneSpin(deltaTime);
-  syncRigidBodiesToTransforms();
+  if (!launcherActive) {
+    updateDefaultSceneSpin(deltaTime);
+    syncRigidBodiesToTransforms();
+  } else {
+    pLauncher->pollBackgroundTasks([this](const sauce::launcher::LaunchRequest& request) {
+      return finalizeLauncherLaunch(request);
+    });
+  }
 
   pImGuiRenderer->newFrame(deltaTime);
   buildExampleUI();
+
+  if (launcherActive) {
+    pRenderer->drawFrame(logicalDevice, *pScene, pImGuiRenderer.get());
+    return;
+  }
 
   auto rigidBodies = collectRigidBodies();
   const size_t dynamicRigidBodyCount = static_cast<size_t>(std::count_if(
@@ -1065,8 +1146,144 @@ void SauceEngineApp::shutdown() {
 }
 
 void SauceEngineApp::buildExampleUI() {
-    pImGuiComponentManager->renderAll();
+  if (launcherActive) {
+    pLauncher->render(
+        [this](const sauce::launcher::LaunchRequest& request) {
+          return finalizeLauncherLaunch(request);
+        },
+        [this]() {
+          if (platformView) {
+            platformView->requestClose();
+          }
+        });
+    return;
   }
+
+  pImGuiComponentManager->renderAll();
+}
+
+bool SauceEngineApp::finalizeLauncherLaunch(const sauce::launcher::LaunchRequest& request) {
+  const bool resolutionChanged = request.width != width || request.height != height;
+
+  width = request.width;
+  height = request.height;
+  modelRotationDegrees = request.modelRotationDegrees;
+  modelRotationExplicit = true;
+  sceneFile = request.scenePath;
+  iblFile = request.iblPath;
+
+  if (!loadConfiguredScene()) {
+    return false;
+  }
+
+  if (platformView) {
+    if (resolutionChanged) {
+      platformView->setWindowSize(width, height);
+      if (pRenderer) {
+        pRenderer->setFramebufferResized();
+      }
+
+      const vk::Extent2D extent = platformView->getFramebufferExtent();
+      if (pScene && extent.width > 0 && extent.height > 0) {
+        pScene->getCameraRW().setViewportSize(
+            static_cast<float>(extent.width),
+            static_cast<float>(extent.height));
+      }
+    }
+
+    platformView->setWindowTitle(kEngineWindowTitle);
+  }
+
+  launcherActive = false;
+  launcherEnabled = false;
+  setCursorCapture(true);
+  return true;
+}
+
+bool SauceEngineApp::resolveConfiguredRemoteAssets(std::string& errorMessage) {
+  if (!polyHavenModelId.empty()) {
+    const auto modelDownload =
+        sauce::launcher::downloadPolyHavenModelGltf(polyHavenModelId, polyHavenModelResolution);
+    if (!modelDownload.errorMessage.empty()) {
+      errorMessage = "Poly Haven model download failed: " + modelDownload.errorMessage;
+      return false;
+    }
+    sceneFile = modelDownload.localPath.string();
+    if (!modelRotationExplicit) {
+      modelRotationDegrees = defaultModelRotationDegrees();
+    }
+  }
+
+  if (!polyHavenHdriId.empty()) {
+    const auto hdriDownload =
+        sauce::launcher::downloadPolyHavenHdri(polyHavenHdriId, polyHavenHdriResolution);
+    if (!hdriDownload.errorMessage.empty()) {
+      errorMessage = "Poly Haven HDRI download failed: " + hdriDownload.errorMessage;
+      return false;
+    }
+    iblFile = hdriDownload.localPath.string();
+  }
+
+  return true;
+}
+
+bool SauceEngineApp::loadConfiguredScene() {
+  if (!pScene) {
+    return false;
+  }
+
+  pScene->getEntitiesMut().clear();
+  pScene->setCurrentFilePath("");
+  dropDemoActive = false;
+  draggedEntity = nullptr;
+  dragTraceEntity = nullptr;
+  dragTraceReleaseStepsRemaining = 0;
+  defaultSceneSpinActive = false;
+  defaultSceneSpinEntityName.clear();
+
+  const vk::Extent2D extent = platformView ? platformView->getFramebufferExtent() : vk::Extent2D{};
+  const float viewportWidth = extent.width > 0 ? static_cast<float>(extent.width) : static_cast<float>(width);
+  const float viewportHeight = extent.height > 0 ? static_cast<float>(extent.height) : static_cast<float>(height);
+  pScene->getCameraRW().setViewportSize(viewportWidth, viewportHeight);
+
+  defaultSceneSpinEnabled = sceneFile.empty();
+  if (sceneFile.empty()) {
+    sceneFile = "assets/models/Cube.gltf";
+  }
+
+  if (!pScene->loadFromFile(sceneFile)) {
+    return false;
+  }
+
+  if (!pScene->getEntities().empty()) {
+    if (!defaultSceneSpinEnabled) {
+      applyGlobalModelRotation(
+          *pScene,
+          resolvedModelRotationDegrees(sceneFile, modelRotationExplicit, modelRotationDegrees));
+      frameLoadedSceneCamera();
+    } else {
+      frameCameraToScene();
+      setupDefaultSceneSpin();
+    }
+
+    uploadMeshGPUResources();
+    setupSceneRenderer();
+  }
+
+  if (!iblFile.empty() && pRenderer) {
+    pRenderer->loadIBL(iblFile);
+  }
+
+  return true;
+}
+
+void SauceEngineApp::setCursorCapture(bool captured) {
+  cursorCaptured = captured;
+  if (platformView) {
+    platformView->setCursorCaptured(captured);
+  }
+  firstMouse = true;
+}
 
 void SauceEngineApp::syncRigidBodiesToTransforms() {
     if (pScene) {

@@ -7,7 +7,9 @@
 
 #include <imgui.h>
 
+#include <array>
 #include <cstdlib>
+#include <string>
 #include <vector>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -36,6 +38,7 @@
 #include <app/ui/components/Text.hpp>
 #include <app/ui/components/TextColored.hpp>
 #include <app/ui/components/TextWrapped.hpp>
+#include <launcher/AppLauncher.hpp>
 
 #ifdef NDEBUG
 constexpr bool enableValidationLayers = false;
@@ -109,6 +112,10 @@ private:
   void processInput(float deltaTime);
 
   void buildExampleUI();
+  bool finalizeLauncherLaunch(const sauce::launcher::LaunchRequest& request);
+  bool loadConfiguredScene();
+  bool resolveConfiguredRemoteAssets(std::string& errorMessage);
+  void setCursorCapture(bool captured);
 
   void beginDrag(double mouseX, double mouseY);
   void updateDrag(double mouseX, double mouseY);
@@ -141,13 +148,41 @@ public:
   void setCameraCollisionEnabled(bool enabled) { cameraCollisionEnabled = enabled; }
   void setIBLFile(const std::string& path) { iblFile = path; }
   void setPhysicsTickRate(double hz);
+  void setModelRotationDegrees(const std::array<float, 3>& degrees, bool explicitOverride = true) {
+    modelRotationDegrees = degrees;
+    modelRotationExplicit = explicitOverride;
+  }
+  void setPolyHavenModelSelection(const std::string& id, const std::string& resolution) {
+    polyHavenModelId = id;
+    polyHavenModelResolution = resolution;
+  }
+  void setPolyHavenHdriSelection(const std::string& id, const std::string& resolution) {
+    polyHavenHdriId = id;
+    polyHavenHdriResolution = resolution;
+  }
+  void setLauncherEnabled(bool enabled) {
+    launcherEnabled = enabled;
+    launcherActive = enabled;
+  }
 
 private:
   std::string sceneFile;
   std::string iblFile;
+  std::array<float, 3> modelRotationDegrees{
+      static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_X_DEGREES),
+      static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_Y_DEGREES),
+      static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_Z_DEGREES)};
+  bool modelRotationExplicit = false;
+  std::string polyHavenModelId;
+  std::string polyHavenModelResolution = "2k";
+  std::string polyHavenHdriId;
+  std::string polyHavenHdriResolution = "4k";
+  bool launcherEnabled = false;
+  bool launcherActive = false;
+  std::unique_ptr<sauce::launcher::AppLauncher> pLauncher;
   double physicsTickRate = 128.0;
-  uint32_t width;
-  uint32_t height;
+  uint32_t width = 0;
+  uint32_t height = 0;
 };
 
-}
+} // namespace sauce

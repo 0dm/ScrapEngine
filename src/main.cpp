@@ -47,10 +47,17 @@ int main(int argc, const char *argv[]) {
 
   const std::string scenePath = anchorUserFilePath(ops.scene_file);
   const std::string iblPath = anchorUserFilePath(ops.ibl_file);
+  const bool hasDirectLaunchSelection =
+      !scenePath.empty() ||
+      !iblPath.empty() ||
+      !ops.polyhaven_model_id.empty() ||
+      !ops.polyhaven_hdri_id.empty() ||
+      ops.model_rotation_provided;
+  const bool shouldShowLauncher = !ops.skip_launcher && !hasDirectLaunchSelection;
 
   sauce::SauceEngineApp mainApp;
   auto window = sauce::platform::createPlatformWindow({
-      .title = "SauceEngine",
+      .title = shouldShowLauncher ? "SauceEngine Launcher" : "SauceEngine",
       .width = ops.scr_width,
       .height = ops.scr_height,
       .resizable = true,
@@ -65,6 +72,18 @@ int main(int argc, const char *argv[]) {
       mainApp.setIBLFile(iblPath);
     }
     mainApp.setPhysicsTickRate(ops.tickrate);
+    mainApp.setModelRotationDegrees(
+        {static_cast<float>(ops.model_rotate_x_degrees),
+         static_cast<float>(ops.model_rotate_y_degrees),
+         static_cast<float>(ops.model_rotate_z_degrees)},
+        ops.model_rotation_provided);
+    if (!ops.polyhaven_model_id.empty()) {
+      mainApp.setPolyHavenModelSelection(ops.polyhaven_model_id, ops.polyhaven_model_resolution);
+    }
+    if (!ops.polyhaven_hdri_id.empty()) {
+      mainApp.setPolyHavenHdriSelection(ops.polyhaven_hdri_id, ops.polyhaven_hdri_resolution);
+    }
+    mainApp.setLauncherEnabled(shouldShowLauncher);
     mainApp.initialize(*window, ops.scr_width, ops.scr_height);
 
     auto lastFrameTime = std::chrono::steady_clock::now();

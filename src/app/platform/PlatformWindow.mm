@@ -546,6 +546,20 @@ void PlatformWindow::requestClose() {
   [impl->window close];
 }
 
+void PlatformWindow::setWindowTitle(const std::string& title) {
+  impl->window.title = [NSString stringWithUTF8String:title.c_str()];
+}
+
+void PlatformWindow::setWindowSize(uint32_t width, uint32_t height) {
+  if (impl->window == nil || impl->contentView == nil) {
+    return;
+  }
+
+  [impl->window setContentSize:NSMakeSize(static_cast<CGFloat>(width), static_cast<CGFloat>(height))];
+  [impl->contentView layoutSubtreeIfNeeded];
+  impl->updateDrawableSize(impl->contentView);
+}
+
 InputState PlatformWindow::consumeInputState() {
   InputState snapshot = impl->inputState;
   resetTransientInput(impl->inputState);
@@ -638,6 +652,8 @@ float PlatformWindow::getContentScaleFactor() const { return 1.0f; }
 void PlatformWindow::pumpEvents() {}
 bool PlatformWindow::shouldClose() const { return true; }
 void PlatformWindow::requestClose() {}
+void PlatformWindow::setWindowTitle(const std::string&) {}
+void PlatformWindow::setWindowSize(uint32_t, uint32_t) {}
 InputState PlatformWindow::consumeInputState() { return {}; }
 void PlatformWindow::prepareImGuiFrame(ImGuiIO&, float) {}
 void PlatformWindow::setCursorCaptured(bool) {}

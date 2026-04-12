@@ -88,6 +88,8 @@ public:
   virtual void pumpEvents() = 0;
   virtual bool shouldClose() const = 0;
   virtual void requestClose() = 0;
+  virtual void setWindowTitle(const std::string& title) = 0;
+  virtual void setWindowSize(uint32_t width, uint32_t height) = 0;
   virtual InputState consumeInputState() = 0;
   virtual void prepareImGuiFrame(ImGuiIO& io, float deltaTime) = 0;
   virtual void setCursorCaptured(bool captured) = 0;
