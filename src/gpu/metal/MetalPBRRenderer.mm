@@ -831,33 +831,28 @@ fragment float4 pbr_fs(VOutP v [[stage_in]],
                 matGpu.alphaMode = static_cast<std::uint32_t>(p.alphaMode);
                 id<MTLTexture> tmp = nil;
                 if (auto pt = d.material->getTexture(scrap::modeling::TextureType::BaseColor)) {
-                        uploadModelTextureIfNeeded(dev, pt.get(), pImpl->texCache,
-                                                   tmp);
+                    uploadModelTextureIfNeeded(dev, pt.get(), pImpl->texCache, tmp);
                     if (tmp)
                         tBase = tmp;
                 }
                 if (auto pt = d.material->getTexture(scrap::modeling::TextureType::Normal)) {
-                        uploadModelTextureIfNeeded(dev, pt.get(), pImpl->texCache,
-                                                   tmp);
+                    uploadModelTextureIfNeeded(dev, pt.get(), pImpl->texCache, tmp);
                     if (tmp)
                         tNor = tmp;
                 }
                 if (auto pt =
                         d.material->getTexture(scrap::modeling::TextureType::MetallicRoughness)) {
-                        uploadModelTextureIfNeeded(dev, pt.get(), pImpl->texCache,
-                                                   tmp);
+                    uploadModelTextureIfNeeded(dev, pt.get(), pImpl->texCache, tmp);
                     if (tmp)
                         tMr = tmp;
                 }
                 if (auto pt = d.material->getTexture(scrap::modeling::TextureType::Emissive)) {
-                        uploadModelTextureIfNeeded(dev, pt.get(), pImpl->texCache,
-                                                   tmp);
+                    uploadModelTextureIfNeeded(dev, pt.get(), pImpl->texCache, tmp);
                     if (tmp)
                         tEmi = tmp;
                 }
                 if (auto pt = d.material->getTexture(scrap::modeling::TextureType::Occlusion)) {
-                        uploadModelTextureIfNeeded(dev, pt.get(), pImpl->texCache,
-                                                   tmp);
+                    uploadModelTextureIfNeeded(dev, pt.get(), pImpl->texCache, tmp);
                     if (tmp)
                         tOcc = tmp;
                 }

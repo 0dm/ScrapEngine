@@ -504,8 +504,7 @@ namespace scrap {
         if (!cursorCaptured) {
             const auto& leftMouse =
                 input.pointer.buttons[static_cast<std::size_t>(platform::MouseButton::Left)];
-            if (leftMouse.pressed &&
-                (worldDragBypassImGui || !ImGui::GetIO().WantCaptureMouse)) {
+            if (leftMouse.pressed && (worldDragBypassImGui || !ImGui::GetIO().WantCaptureMouse)) {
                 beginDrag(input.pointer.x, input.pointer.y);
             }
             if (draggedEntity && (leftMouse.down || leftMouse.released ||

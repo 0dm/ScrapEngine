@@ -1,5 +1,5 @@
-#include <launcher/LauncherCatalog.hpp>
 #include <launcher/AppOptionsDefaults.hpp>
+#include <launcher/LauncherCatalog.hpp>
 #include <launcher/optionParser.hpp>
 
 #include <algorithm>

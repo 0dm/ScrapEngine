@@ -71,9 +71,9 @@ namespace scrap::ui {
         const bool compactLayout = io.DisplaySize.x <= 520.0f;
         if (compactLayout) {
             ImGui::SetNextWindowPos(ImVec2(8.0f, 8.0f), ImGuiCond_Always);
-            ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x - 16.0f,
-                                            std::min(io.DisplaySize.y * 0.58f, 300.0f)),
-                                     ImGuiCond_Always);
+            ImGui::SetNextWindowSize(
+                ImVec2(io.DisplaySize.x - 16.0f, std::min(io.DisplaySize.y * 0.58f, 300.0f)),
+                ImGuiCond_Always);
         } else {
             ImGui::SetNextWindowSize(ImVec2(420.f, 430.f), ImGuiCond_FirstUseEver);
         }
@@ -88,7 +88,8 @@ namespace scrap::ui {
                     if (s.sceneLabel[0] != '\0') {
                         kvRow("Scene", s.sceneLabel);
                     }
-                    kvRowFmt("Entities", "%u active / %u total", s.activeEntityCount, s.entityCount);
+                    kvRowFmt("Entities", "%u active / %u total", s.activeEntityCount,
+                             s.entityCount);
                     kvRowFmt("Mesh primitives", "%u", s.meshPrimitiveCount);
                     kvRowFmt("Lights", "%u", s.gpuLightCount);
                     kvRowFmt("Physics tick", "%.0f Hz", s.physicsTickHz);
@@ -101,7 +102,8 @@ namespace scrap::ui {
                     ImGui::CollapsingHeader("Rendering", ImGuiTreeNodeFlags_DefaultOpen)) {
                     if (compactLayout) {
                         if (kvTableBegin("render_compact")) {
-                            kvRowFmt("Drawable", "%u x %u px", s.drawableWidthPx, s.drawableHeightPx);
+                            kvRowFmt("Drawable", "%u x %u px", s.drawableWidthPx,
+                                     s.drawableHeightPx);
                             kvRowFmt("Scale", "%.2f", static_cast<double>(s.contentScale));
                             kvRowFmt("Drawables", "%u", s.metalDrawableCount);
                             kvRowStatus("PBR", s.metalPbrReady);
@@ -112,7 +114,8 @@ namespace scrap::ui {
                     } else {
                         ImGui::SeparatorText("Rendering");
                         if (kvTableBegin("render")) {
-                            kvRowFmt("Drawable", "%u x %u px", s.drawableWidthPx, s.drawableHeightPx);
+                            kvRowFmt("Drawable", "%u x %u px", s.drawableWidthPx,
+                                     s.drawableHeightPx);
                             kvRowFmt("Scale", "%.2f", static_cast<double>(s.contentScale));
                             kvRowFmt("Drawables", "%u", s.metalDrawableCount);
                             kvRowStatus("PBR", s.metalPbrReady);
