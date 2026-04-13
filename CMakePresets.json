@@ -11,18 +11,19 @@
       }
     },
     {
-      "name": "macos-vcpkg",
+      "name": "default",
       "inherits": "vcpkg",
-      "displayName": "macOS (arm64)",
-      "description": "Primary ScrapEngine preset; configure + build under ./build",
+      "displayName": "Default (macOS arm64)",
+      "description": "Primary ScrapEngine configure preset → ./build",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "arm64-osx"
       }
     },
     {
-      "name": "default",
-      "inherits": "macos-vcpkg",
-      "displayName": "Default (macOS)"
+      "name": "macos-vcpkg",
+      "inherits": "default",
+      "displayName": "macOS (arm64)",
+      "description": "Alias of preset default (same ./build)."
     },
     {
       "name": "ios-vcpkg",

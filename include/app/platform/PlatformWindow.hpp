@@ -24,6 +24,8 @@ namespace scrap::platform {
         InputState consumeInputState() override;
         void prepareImGuiFrame(ImGuiIO& io, float deltaTime) override;
         void setCursorCaptured(bool captured) override;
+        void activateWindowForInput() override;
+        bool isWindowKey() const override;
 
       private:
         explicit PlatformWindow(std::unique_ptr<PlatformWindowImpl> impl);

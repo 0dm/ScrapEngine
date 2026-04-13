@@ -58,6 +58,8 @@ namespace scrap {
         float lastX = 0.0f;
         float lastY = 0.0f;
         bool firstMouse = true;
+        float debugLastPointerXPts = 0.f;
+        float debugLastPointerYPts = 0.f;
         bool cursorCaptured = false;
         bool gravePressedLastFrame = false;
         bool demoTriggerPressedLastFrame = false;
@@ -177,6 +179,8 @@ namespace scrap {
         std::string polyHavenHdriResolution = "4k";
         bool launcherEnabled = false;
         bool launcherActive = false;
+        bool clearImGuiFocusAfterLauncherHandoff = false;
+        int worldDragImGuiUnblockFrames = 0;
         std::unique_ptr<scrap::launcher::AppLauncher> pLauncher;
         double physicsTickRate = 128.0;
         uint32_t width = 0;

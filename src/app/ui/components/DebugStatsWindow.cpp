@@ -2,6 +2,10 @@
 
 #include <app/ui/AppDebugStats.hpp>
 
+#include <cstdarg>
+#include <cstdio>
+#include <string>
+
 #include <gpu/metal/MetalDeviceInfo.hpp>
 #include <imgui.h>
 
@@ -11,6 +15,50 @@ namespace scrap::ui {
 
         const AppDebugStats* g_appDebugStats = nullptr;
 
+        void kvTableBegin(const char* id, float labelWeight = 0.52f) {
+            const ImGuiTableFlags flags = ImGuiTableFlags_SizingStretchProp;
+            if (ImGui::BeginTable(id, 2, flags)) {
+                ImGui::TableSetupColumn("k", ImGuiTableColumnFlags_WidthStretch, labelWeight);
+                ImGui::TableSetupColumn("v", ImGuiTableColumnFlags_WidthStretch, 1.0f - labelWeight);
+            }
+        }
+
+        void kvRow(const char* label, const char* value) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted(label);
+            ImGui::TableSetColumnIndex(1);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted(value);
+        }
+
+        void kvRowFmt(const char* label, const char* fmt, ...) {
+            char buf[256];
+            va_list args;
+            va_start(args, fmt);
+            std::vsnprintf(buf, sizeof(buf), fmt, args);
+            va_end(args);
+            kvRow(label, buf);
+        }
+
+        void kvRowStatus(const char* label, bool ok, const char* okText = "Ready",
+                         const char* badText = "No") {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted(label);
+            ImGui::TableSetColumnIndex(1);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextColored(ok ? ImVec4(0.45f, 0.78f, 0.52f, 1.0f)
+                                  : ImVec4(0.82f, 0.48f, 0.48f, 1.0f),
+                               "%s", ok ? okText : badText);
+        }
+
+        const char* yesNo(bool v) {
+            return v ? "Yes" : "No";
+        }
+
     } // namespace
 
     void setAppDebugStatsSource(const AppDebugStats* stats) {
@@ -18,43 +66,79 @@ namespace scrap::ui {
     }
 
     void DebugStatsWindow::render() {
-        ImGui::SetNextWindowSize(ImVec2(420.f, 340.f), ImGuiCond_FirstUseEver);
-        ImGui::Begin("ScrapEngine Debug");
+        ImGui::SetNextWindowSize(ImVec2(420.f, 430.f), ImGuiCond_FirstUseEver);
+        ImGui::Begin("Diagnostics");
+
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(6.0f, 3.0f));
 
         ImGuiIO& io = ImGui::GetIO();
-        ImGui::Text("FPS: %.1f", io.Framerate);
-        if (io.Framerate > 0.0f) {
-            ImGui::Text("Frame time: %.3f ms", 1000.0f / io.Framerate);
-        }
-        ImGui::Text("Delta time: %.3f ms", static_cast<double>(io.DeltaTime) * 1000.0);
 
         if (g_appDebugStats) {
             const AppDebugStats& s = *g_appDebugStats;
-            ImGui::Separator();
-            ImGui::Text("Frame dt (app): %.3f ms", static_cast<double>(s.frameDeltaSec) * 1000.0);
-            ImGui::Text("Physics: %.0f Hz  |  acc: %.3f ms", s.physicsTickHz,
-                        static_cast<double>(s.physicsAccumulatorSec) * 1000.0);
-            ImGui::Text("Entities: %u active / %u total", s.activeEntityCount, s.entityCount);
-            ImGui::Text("Mesh primitives: %u", s.meshPrimitiveCount);
-            ImGui::Text("GPU lights: %u", s.gpuLightCount);
-            ImGui::Text("Viewport: %ux%u px", s.drawableWidthPx, s.drawableHeightPx);
-            ImGui::Text("Content scale: %.2f", static_cast<double>(s.contentScale));
+
+            ImGui::SeparatorText("Scene");
+            kvTableBegin("scene");
             if (s.sceneLabel[0] != '\0') {
-                ImGui::TextWrapped("Scene: %s", s.sceneLabel);
+                kvRow("Scene", s.sceneLabel);
             }
-            ImGui::Text("Launcher UI: %s", s.launcherActive ? "yes" : "no");
-            ImGui::Text("Present: %s",
-                        s.uncappedPresentation ? "uncapped (no display sync)" : "display-synced");
-            ImGui::Separator();
-            ImGui::Text("Metal drawables: %u", s.metalDrawableCount);
-            ImGui::Text("Metal PBR ready: %s", s.metalPbrReady ? "yes" : "no");
-            ImGui::Text("IBL loaded: %s", s.metalIblLoaded ? "yes" : "no");
+            kvRowFmt("Entities", "%u active / %u total", s.activeEntityCount, s.entityCount);
+            kvRowFmt("Mesh primitives", "%u", s.meshPrimitiveCount);
+            kvRowFmt("Lights", "%u", s.gpuLightCount);
+            kvRowFmt("Physics tick", "%.0f Hz", s.physicsTickHz);
+            kvRowFmt("Physics lag", "%.3f ms",
+                     static_cast<double>(s.physicsAccumulatorSec) * 1000.0);
+            ImGui::EndTable();
+
+            ImGui::SeparatorText("Rendering");
+            kvTableBegin("render");
+            kvRowFmt("Drawable", "%u x %u px", s.drawableWidthPx, s.drawableHeightPx);
+            kvRowFmt("Content scale", "%.2f", static_cast<double>(s.contentScale));
+            kvRowFmt("Drawables", "%u", s.metalDrawableCount);
+            kvRowStatus("PBR pipeline", s.metalPbrReady);
+            kvRowStatus("IBL", s.metalIblLoaded, "Loaded", "Fallback");
+            kvRow("Presentation", s.uncappedPresentation ? "Uncapped" : "Display-synced");
+            kvRow("Launcher", s.launcherActive ? "Visible" : "Hidden");
+            ImGui::EndTable();
+
+            ImGui::SeparatorText("Input");
+            kvTableBegin("input");
+            kvRowStatus("Window focus", s.appWindowKey, "Focused", "Background");
+            kvRow("Pointer mode", s.cursorCaptured ? "Captured" : "Free");
+            kvRowFmt("Pointer (points)", "%.1f, %.1f", static_cast<double>(s.pointerXPts),
+                     static_cast<double>(s.pointerYPts));
+            kvRow("Dragging body", yesNo(s.draggingRigidBody));
+            if (s.worldDragImGuiUnblockFramesRemaining > 0 || s.pendingImGuiFocusClear) {
+                kvRowFmt("Input unblock frames", "%d", s.worldDragImGuiUnblockFramesRemaining);
+                kvRow("Focus clear pending", yesNo(s.pendingImGuiFocusClear));
+            }
+            ImGui::EndTable();
         }
 
-        ImGui::Separator();
-        ImGui::Text("Backend: Metal");
-        ImGui::Text("Device: %s", scrap::gpu::metal::defaultMetalDeviceNameUtf8().c_str());
+        ImGui::SeparatorText("GPU");
+        kvTableBegin("gpu");
+        {
+            const std::string& device = scrap::gpu::metal::defaultMetalDeviceNameUtf8();
+            kvRow("Backend", "Metal");
+            kvRow("Device", device.c_str());
+        }
+        ImGui::EndTable();
 
+        if (ImGui::CollapsingHeader("ImGui Input State")) {
+            kvTableBegin("imgui_io");
+            kvRow("Capture mouse", yesNo(io.WantCaptureMouse));
+            kvRow("Capture keyboard", yesNo(io.WantCaptureKeyboard));
+            kvRow("App focus lost", yesNo(io.AppFocusLost));
+            kvRowFmt("Mouse position", "%.1f, %.1f", static_cast<double>(io.MousePos.x),
+                     static_cast<double>(io.MousePos.y));
+            kvRow("Window hovered",
+                  yesNo(ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow |
+                                               ImGuiHoveredFlags_RootAndChildWindows)));
+            kvRow("Window focused",
+                  yesNo(ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)));
+            ImGui::EndTable();
+        }
+
+        ImGui::PopStyleVar();
         ImGui::End();
     }
 

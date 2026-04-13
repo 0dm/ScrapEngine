@@ -32,8 +32,6 @@ cmake -S . -B build \
 cmake --build build --target ScrapEngine
 ```
 
-You can also use `CMakePresets.json` if your local CMake handles the presets cleanly.
-
 # Run
 
 ```bash

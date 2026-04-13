@@ -194,6 +194,19 @@ namespace scrap {
                     glm::normalize(glm::vec3(farPoint) - glm::vec3(nearPoint))};
         }
 
+        Ray pickingRayFromViewPointer(const Camera& camera, double pointerX, double pointerY,
+                                      float contentScale) {
+            const float vw = camera.getViewportWidth();
+            const float vh = camera.getViewportHeight();
+            if (vw < 1.0f || vh < 1.0f) {
+                return {glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 1.0f)};
+            }
+            const float mx = static_cast<float>(pointerX) * contentScale;
+            const float my = static_cast<float>(pointerY) * contentScale;
+            return screenToWorldRay(camera, static_cast<double>(mx), static_cast<double>(my), vw,
+                                    vh);
+        }
+
         bool rayIntersectsAABB(const Ray& ray, const AABB& box, float& tOut) {
             float tmin = 0.0f;
             float tmax = std::numeric_limits<float>::max();
@@ -373,6 +386,13 @@ namespace scrap {
         }
 
         scrap::ui::setAppDebugStatsSource(&debugStats_);
+
+        platformView.activateWindowForInput();
+
+        if (!launcherActive && ImGui::GetCurrentContext() != nullptr) {
+            clearImGuiFocusAfterLauncherHandoff = true;
+            worldDragImGuiUnblockFrames = 12;
+        }
     }
 
     void ScrapEngineApp::setCustomUIBuilder(
@@ -416,6 +436,8 @@ namespace scrap {
         }
 
         const platform::InputState input = platformView->consumeInputState();
+        debugLastPointerXPts = input.pointer.x;
+        debugLastPointerYPts = input.pointer.y;
         if (input.framebufferResized && pMetalPresenter) {
             const platform::FramebufferExtent extent = platformView->getFramebufferExtent();
             pMetalPresenter->setDrawableSizePixels(extent.width, extent.height);
@@ -434,6 +456,11 @@ namespace scrap {
         if (launcherActive) {
             endDrag();
             return;
+        }
+
+        const bool worldDragBypassImGui = worldDragImGuiUnblockFrames > 0;
+        if (worldDragImGuiUnblockFrames > 0) {
+            worldDragImGuiUnblockFrames--;
         }
 
         if (cursorCaptured) {
@@ -468,7 +495,8 @@ namespace scrap {
         if (!cursorCaptured) {
             const auto& leftMouse =
                 input.pointer.buttons[static_cast<std::size_t>(platform::MouseButton::Left)];
-            if (leftMouse.pressed && !ImGui::GetIO().WantCaptureMouse) {
+            if (leftMouse.pressed &&
+                (worldDragBypassImGui || !ImGui::GetIO().WantCaptureMouse)) {
                 beginDrag(input.pointer.x, input.pointer.y);
             }
             if (draggedEntity && (leftMouse.down || leftMouse.released ||
@@ -584,7 +612,9 @@ namespace scrap {
     }
 
     bool ScrapEngineApp::isPhysicsDemoScene() const {
-        return sceneFile.find("testScene") != std::string::npos;
+        return sceneFile.find("testScene") != std::string::npos ||
+               sceneFile.find("jenga_tower") != std::string::npos ||
+               sceneFile.find("monkeyball_course") != std::string::npos;
     }
 
     Entity* ScrapEngineApp::findDefaultSceneSpinEntity() {
@@ -741,6 +771,8 @@ namespace scrap {
         }
     }
 
+    // F key: re-run armScene (rigid bodies, collision on, zero velocities). Physics demos also
+    // auto-arm on load when the scene path matches isPhysicsDemoScene().
     void ScrapEngineApp::startDropDemo() {
         if (!pScene) {
             return;
@@ -1140,9 +1172,22 @@ namespace scrap {
         debugStats_.metalPbrReady = pMetalPBRRenderer && pMetalPBRRenderer->ready();
         debugStats_.metalIblLoaded =
             static_cast<bool>(metalIBL_ && metalIBL_->prefilterArray != nullptr);
+
+        debugStats_.cursorCaptured = cursorCaptured;
+        debugStats_.appWindowKey = platformView ? platformView->isWindowKey() : true;
+        debugStats_.pendingImGuiFocusClear = clearImGuiFocusAfterLauncherHandoff;
+        debugStats_.worldDragImGuiUnblockFramesRemaining = worldDragImGuiUnblockFrames;
+        debugStats_.draggingRigidBody = draggedEntity != nullptr;
+        debugStats_.pointerXPts = debugLastPointerXPts;
+        debugStats_.pointerYPts = debugLastPointerYPts;
     }
 
     void ScrapEngineApp::buildExampleUI() {
+        if (ImGui::GetCurrentContext() != nullptr && clearImGuiFocusAfterLauncherHandoff) {
+            ImGui::SetWindowFocus(nullptr);
+            clearImGuiFocusAfterLauncherHandoff = false;
+        }
+
         if (launcherActive) {
             pLauncher->render(
                 [this](const scrap::launcher::LaunchRequest& request) {
@@ -1185,11 +1230,15 @@ namespace scrap {
             }
 
             platformView->setWindowTitle(kEngineWindowTitle);
+            platformView->activateWindowForInput();
         }
 
         launcherActive = false;
         launcherEnabled = false;
-        setCursorCapture(true);
+        // Leave pointer free so block picking/drag works; use ` for FPS pointer lock.
+        setCursorCapture(false);
+        clearImGuiFocusAfterLauncherHandoff = true;
+        worldDragImGuiUnblockFrames = 12;
         return true;
     }
 
@@ -1534,8 +1583,8 @@ namespace scrap {
         }
 
         const auto& camera = pScene->getCameraRW();
-        const Ray ray = screenToWorldRay(camera, mouseX, mouseY, static_cast<float>(width),
-                                         static_cast<float>(height));
+        const float scale = platformView ? platformView->getContentScaleFactor() : 1.0f;
+        const Ray ray = pickingRayFromViewPointer(camera, mouseX, mouseY, scale);
 
         Entity* bestEntity = nullptr;
         float bestT = std::numeric_limits<float>::max();
@@ -1613,8 +1662,8 @@ namespace scrap {
         }
 
         const auto& camera = pScene->getCameraRW();
-        const Ray ray = screenToWorldRay(camera, mouseX, mouseY, static_cast<float>(width),
-                                         static_cast<float>(height));
+        const float scale = platformView ? platformView->getContentScaleFactor() : 1.0f;
+        const Ray ray = pickingRayFromViewPointer(camera, mouseX, mouseY, scale);
 
         float denom = glm::dot(ray.direction, dragPlaneNormal);
         if (std::abs(denom) < 1e-8f) {

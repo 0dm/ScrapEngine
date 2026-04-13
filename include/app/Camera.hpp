@@ -116,6 +116,13 @@ namespace scrap {
             scrHeight = std::max(height, 1.0f);
         }
 
+        float getViewportWidth() const {
+            return scrWidth;
+        }
+        float getViewportHeight() const {
+            return scrHeight;
+        }
+
         void setMovementSpeed(float speed) {
             this->movementSpeed = speed;
         }

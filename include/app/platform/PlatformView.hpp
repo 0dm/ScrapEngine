@@ -95,6 +95,16 @@ namespace scrap::platform {
         virtual InputState consumeInputState() = 0;
         virtual void prepareImGuiFrame(ImGuiIO& io, float deltaTime) = 0;
         virtual void setCursorCaptured(bool captured) = 0;
+
+        /// macOS: raise the window, activate the app, and make the content view first responder so
+        /// mouse tracking and clicks match the Metal view (avoids needing to cmd-tab away and back).
+        virtual void activateWindowForInput() {
+        }
+
+        /// Desktop: `NSWindow.isKeyWindow`. Default true when not implemented.
+        virtual bool isWindowKey() const {
+            return true;
+        }
     };
 
     struct PlatformWindowCreateInfo {

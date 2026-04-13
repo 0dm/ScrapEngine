@@ -256,6 +256,21 @@ namespace scrap::platform {
             inputState.pointer.deltaY += static_cast<float>(pointInView.y - lastPointerLocation.y);
             lastPointerLocation = pointInView;
         }
+
+        // GLFW-style apps get consistent client-space coords whenever the window is focused; AppKit
+        // can leave our cached pointer stale until the first move event after key/focus changes.
+        void syncPointerPositionFromSystemCursor() {
+            if (contentView == nil || contentView.window == nil) {
+                return;
+            }
+            const NSPoint screenPt = [NSEvent mouseLocation];
+            const NSPoint winPt = [contentView.window convertPointFromScreen:screenPt];
+            const NSPoint local = [contentView convertPoint:winPt fromView:nil];
+            inputState.pointer.x = static_cast<float>(local.x);
+            inputState.pointer.y = static_cast<float>(local.y);
+            lastPointerLocation = local;
+            hasPointerLocation = true;
+        }
     };
 
 } // namespace scrap::platform
@@ -271,6 +286,20 @@ namespace scrap::platform {
     self.impl->shouldCloseWindow = true;
     self.impl->inputState.closeRequested = true;
     return YES;
+}
+
+- (void)windowDidBecomeKey:(NSNotification*)notification {
+    (void)notification;
+    NSWindow* w = self.impl->window;
+    if (w == nil || self.impl->contentView == nil) {
+        return;
+    }
+    [w makeFirstResponder:self.impl->contentView];
+    self.impl->syncPointerPositionFromSystemCursor();
+}
+
+- (void)windowDidDeminiaturize:(NSNotification*)notification {
+    [self windowDidBecomeKey:notification];
 }
 
 @end
@@ -291,6 +320,11 @@ namespace scrap::platform {
     return YES;
 }
 
+- (BOOL)acceptsFirstMouse:(NSEvent*)event {
+    (void)event;
+    return YES;
+}
+
 - (void)updateTrackingAreas {
     [super updateTrackingAreas];
     if (_trackingArea != nil) {
@@ -298,7 +332,7 @@ namespace scrap::platform {
     }
     _trackingArea = [[NSTrackingArea alloc]
         initWithRect:self.bounds
-             options:NSTrackingMouseMoved | NSTrackingActiveInKeyWindow | NSTrackingInVisibleRect |
+             options:NSTrackingMouseMoved | NSTrackingActiveAlways | NSTrackingInVisibleRect |
                      NSTrackingEnabledDuringMouseDrag
                owner:self
             userInfo:nil];
@@ -320,6 +354,9 @@ namespace scrap::platform {
 }
 
 - (void)mouseDown:(NSEvent*)event {
+    if (self.window != nil) {
+        [self.window makeFirstResponder:self];
+    }
     self.impl->handlePointerEvent(event, false);
     self.impl->setMouseButton(scrap::platform::MouseButton::Left, true);
 }
@@ -330,6 +367,9 @@ namespace scrap::platform {
 }
 
 - (void)rightMouseDown:(NSEvent*)event {
+    if (self.window != nil) {
+        [self.window makeFirstResponder:self];
+    }
     self.impl->handlePointerEvent(event, false);
     self.impl->setMouseButton(scrap::platform::MouseButton::Right, true);
 }
@@ -340,6 +380,9 @@ namespace scrap::platform {
 }
 
 - (void)otherMouseDown:(NSEvent*)event {
+    if (self.window != nil) {
+        [self.window makeFirstResponder:self];
+    }
     self.impl->handlePointerEvent(event, false);
     if (auto button = mapMouseButton(event.buttonNumber); button.has_value()) {
         self.impl->setMouseButton(*button, true);
@@ -655,6 +698,20 @@ namespace scrap::platform {
         }
     }
 
+    void PlatformWindow::activateWindowForInput() {
+        if (impl->window == nil || impl->contentView == nil) {
+            return;
+        }
+        [NSApp activateIgnoringOtherApps:YES];
+        [impl->window makeKeyAndOrderFront:nil];
+        [impl->window makeFirstResponder:impl->contentView];
+        impl->syncPointerPositionFromSystemCursor();
+    }
+
+    bool PlatformWindow::isWindowKey() const {
+        return impl->window != nil && [impl->window isKeyWindow];
+    }
+
 } // namespace scrap::platform
 
 #else
@@ -700,6 +757,12 @@ namespace scrap::platform {
     void PlatformWindow::prepareImGuiFrame(ImGuiIO&, float) {
     }
     void PlatformWindow::setCursorCaptured(bool) {
+    }
+    void PlatformWindow::activateWindowForInput() {
+    }
+
+    bool PlatformWindow::isWindowKey() const {
+        return true;
     }
 
 } // namespace scrap::platform

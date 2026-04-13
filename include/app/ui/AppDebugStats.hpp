@@ -22,6 +22,14 @@ namespace scrap::ui {
         bool metalPbrReady = false;
         bool metalIblLoaded = false;
         char sceneLabel[160] = {};
+        // Input / focus (filled after processInput in the same tick)
+        bool cursorCaptured = false;
+        bool appWindowKey = true;
+        bool pendingImGuiFocusClear = false;
+        int worldDragImGuiUnblockFramesRemaining = 0;
+        bool draggingRigidBody = false;
+        float pointerXPts = 0.f;
+        float pointerYPts = 0.f;
     };
 
     void setAppDebugStatsSource(const AppDebugStats* stats);
