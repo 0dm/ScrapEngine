@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include <launcher/optionParser.hpp>
+struct AppOptions;
 
 namespace scrap::launcher {
 

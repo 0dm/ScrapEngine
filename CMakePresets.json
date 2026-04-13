@@ -30,10 +30,26 @@
       "inherits": "vcpkg",
       "generator": "Xcode",
       "binaryDir": "${sourceDir}/build-ios-xcode",
+      "displayName": "iOS device (arm64)",
+      "description": "Physical device / generic iOS. Uses vcpkg arm64-ios. Do not use for Simulator — use ios-simulator-vcpkg.",
       "cacheVariables": {
         "CMAKE_SYSTEM_NAME": "iOS",
         "VCPKG_INSTALLED_DIR": "${sourceDir}/build-ios-xcode/vcpkg_installed",
         "VCPKG_TARGET_TRIPLET": "arm64-ios"
+      }
+    },
+    {
+      "name": "ios-simulator-vcpkg",
+      "inherits": "vcpkg",
+      "generator": "Xcode",
+      "binaryDir": "${sourceDir}/build-ios-simulator-xcode",
+      "displayName": "iOS Simulator (arm64)",
+      "description": "Simulator on Apple Silicon Mac. vcpkg triplet arm64-ios-simulator + iphonesimulator SDK.",
+      "cacheVariables": {
+        "CMAKE_SYSTEM_NAME": "iOS",
+        "CMAKE_OSX_SYSROOT": "iphonesimulator",
+        "VCPKG_INSTALLED_DIR": "${sourceDir}/build-ios-simulator-xcode/vcpkg_installed",
+        "VCPKG_TARGET_TRIPLET": "arm64-ios-simulator"
       }
     }
   ]

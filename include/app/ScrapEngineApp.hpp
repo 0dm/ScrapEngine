@@ -28,7 +28,10 @@
 #include <gpu/metal/LayerPresenter.hpp>
 #include <gpu/metal/MetalIBLResources.hpp>
 #include <gpu/metal/MetalPBRRenderer.hpp>
+#include <launcher/AppOptionsDefaults.hpp>
+#ifndef SCRAP_IOS
 #include <launcher/AppLauncher.hpp>
+#endif
 
 #ifdef NDEBUG
 constexpr bool enableValidationLayers = false;
@@ -102,7 +105,9 @@ namespace scrap {
 
         void buildExampleUI();
         void refreshDebugStats(std::uint32_t framebufferWidth, std::uint32_t framebufferHeight);
+#ifndef SCRAP_IOS
         bool finalizeLauncherLaunch(const scrap::launcher::LaunchRequest& request);
+#endif
         bool loadConfiguredScene();
         bool resolveConfiguredRemoteAssets(std::string& errorMessage);
         void setCursorCapture(bool captured);
@@ -169,9 +174,9 @@ namespace scrap {
         std::string sceneFile;
         std::string iblFile;
         std::array<float, 3> modelRotationDegrees{
-            static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_X_DEGREES),
-            static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_Y_DEGREES),
-            static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_Z_DEGREES)};
+            static_cast<float>(AppOptionsDefaults::DEFAULT_MODEL_ROTATE_X_DEGREES),
+            static_cast<float>(AppOptionsDefaults::DEFAULT_MODEL_ROTATE_Y_DEGREES),
+            static_cast<float>(AppOptionsDefaults::DEFAULT_MODEL_ROTATE_Z_DEGREES)};
         bool modelRotationExplicit = false;
         std::string polyHavenModelId;
         std::string polyHavenModelResolution = "2k";
@@ -181,7 +186,9 @@ namespace scrap {
         bool launcherActive = false;
         bool clearImGuiFocusAfterLauncherHandoff = false;
         int worldDragImGuiUnblockFrames = 0;
+#ifndef SCRAP_IOS
         std::unique_ptr<scrap::launcher::AppLauncher> pLauncher;
+#endif
         double physicsTickRate = 128.0;
         uint32_t width = 0;
         uint32_t height = 0;

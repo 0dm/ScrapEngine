@@ -99,6 +99,12 @@ function(scrap_copy_runtime_assets target)
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     ${PROJECT_SOURCE_DIR}/assets $<TARGET_FILE_DIR:${target}>/assets
   )
+  if(SCRAP_IOS)
+    add_custom_command(TARGET ${target} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+      ${PROJECT_SOURCE_DIR}/testScene $<TARGET_FILE_DIR:${target}>/testScene
+    )
+  endif()
 endfunction()
 
 file(GLOB_RECURSE APP_SOURCES CONFIGURE_DEPENDS
@@ -225,6 +231,7 @@ scrap_configure_target(${EXEC_NAME})
 scrap_link_platform_frameworks(${EXEC_NAME})
 
 if(SCRAP_IOS)
+  target_compile_definitions(${EXEC_NAME} PRIVATE SCRAP_IOS=1)
   set_target_properties(${EXEC_NAME} PROPERTIES
     MACOSX_BUNDLE TRUE
     MACOSX_BUNDLE_BUNDLE_NAME "ScrapEngine"

@@ -9,19 +9,19 @@
 #include <string>
 #include <vector>
 
+#include <launcher/AppOptionsDefaults.hpp>
 #include <launcher/LauncherCatalog.hpp>
 #include <launcher/PolyHavenClient.hpp>
-#include <launcher/optionParser.hpp>
 
 namespace scrap::launcher {
 
     struct LaunchRequest {
-        uint32_t width = AppOptions::DEFAULT_SCR_WIDTH;
-        uint32_t height = AppOptions::DEFAULT_SCR_HEIGHT;
+        uint32_t width = AppOptionsDefaults::DEFAULT_SCR_WIDTH;
+        uint32_t height = AppOptionsDefaults::DEFAULT_SCR_HEIGHT;
         std::array<float, 3> modelRotationDegrees{
-            static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_X_DEGREES),
-            static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_Y_DEGREES),
-            static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_Z_DEGREES)};
+            static_cast<float>(AppOptionsDefaults::DEFAULT_MODEL_ROTATE_X_DEGREES),
+            static_cast<float>(AppOptionsDefaults::DEFAULT_MODEL_ROTATE_Y_DEGREES),
+            static_cast<float>(AppOptionsDefaults::DEFAULT_MODEL_ROTATE_Z_DEGREES)};
         std::string scenePath;
         std::string iblPath;
     };
@@ -73,12 +73,12 @@ namespace scrap::launcher {
             int selectedIblTab = 0;
             std::string scenePath;
             std::string iblPath;
-            uint32_t launchWidth = AppOptions::DEFAULT_SCR_WIDTH;
-            uint32_t launchHeight = AppOptions::DEFAULT_SCR_HEIGHT;
+            uint32_t launchWidth = AppOptionsDefaults::DEFAULT_SCR_WIDTH;
+            uint32_t launchHeight = AppOptionsDefaults::DEFAULT_SCR_HEIGHT;
             std::array<float, 3> modelRotationDegrees{
-                static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_X_DEGREES),
-                static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_Y_DEGREES),
-                static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_Z_DEGREES)};
+                static_cast<float>(AppOptionsDefaults::DEFAULT_MODEL_ROTATE_X_DEGREES),
+                static_cast<float>(AppOptionsDefaults::DEFAULT_MODEL_ROTATE_Y_DEGREES),
+                static_cast<float>(AppOptionsDefaults::DEFAULT_MODEL_ROTATE_Z_DEGREES)};
             bool modelRotationCustomized = false;
             std::string commandPreview;
             std::string statusMessage;

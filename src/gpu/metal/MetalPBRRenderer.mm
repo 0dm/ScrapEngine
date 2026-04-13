@@ -81,8 +81,7 @@ struct VIn {
 struct FrameUBO {
   float4x4 view;
   float4x4 proj;
-  float3 cameraPos;
-  float _padF;
+  float4 cameraPos;
 };
 struct DrawPush {
   float4x4 model;
@@ -221,7 +220,7 @@ vertex VOutP pbr_vs(VIn in [[stage_in]], constant FrameUBO& ubo [[buffer(1)]], c
   o.tangent = float4(normalize(nm * in.inTangent.xyz), in.inTangent.w);
   o.texCoord = in.inTexCoord;
   o.colour = in.inColour;
-  o.cameraPos = ubo.cameraPos;
+  o.cameraPos = ubo.cameraPos.xyz;
   o.lightCount = push.lightCount;
   return o;
 }
@@ -380,8 +379,7 @@ fragment float4 pbr_fs(VOutP v [[stage_in]],
             }
         }
 
-        bool uploadModelTextureIfNeeded(id<MTLDevice> dev, id<MTLCommandQueue> uploadQ,
-                                        scrap::modeling::Texture* tex,
+        bool uploadModelTextureIfNeeded(id<MTLDevice> dev, scrap::modeling::Texture* tex,
                                         std::unordered_map<std::uintptr_t, id<MTLTexture>>& cache,
                                         id<MTLTexture>& out) {
             if (!tex) {
@@ -437,9 +435,10 @@ fragment float4 pbr_fs(VOutP v [[stage_in]],
         struct alignas(16) MetalFrameUBO {
             glm::mat4 view{};
             glm::mat4 proj{};
-            glm::vec3 cameraPos{};
-            float _pad0 = 0.f;
+            glm::vec4 cameraPos{0.f, 0.f, 0.f, 0.f};
         };
+        static_assert(sizeof(MetalFrameUBO) == 144);
+        static_assert(offsetof(MetalFrameUBO, cameraPos) == 128);
         struct alignas(16) MetalDrawPush {
             glm::mat4 model{1.f};
             std::uint32_t lightCount = 0;
@@ -771,7 +770,7 @@ fragment float4 pbr_fs(VOutP v [[stage_in]],
         MetalFrameUBO frame{};
         frame.view = view;
         frame.proj = projMetal;
-        frame.cameraPos = cameraPos;
+        frame.cameraPos = glm::vec4(cameraPos, 0.0f);
 
         const std::uint32_t lc =
             static_cast<std::uint32_t>(std::min<std::size_t>(lightCount, kMaxLights));
@@ -832,33 +831,33 @@ fragment float4 pbr_fs(VOutP v [[stage_in]],
                 matGpu.alphaMode = static_cast<std::uint32_t>(p.alphaMode);
                 id<MTLTexture> tmp = nil;
                 if (auto pt = d.material->getTexture(scrap::modeling::TextureType::BaseColor)) {
-                    uploadModelTextureIfNeeded(dev, pImpl->uploadQueue, pt.get(), pImpl->texCache,
-                                               tmp);
+                        uploadModelTextureIfNeeded(dev, pt.get(), pImpl->texCache,
+                                                   tmp);
                     if (tmp)
                         tBase = tmp;
                 }
                 if (auto pt = d.material->getTexture(scrap::modeling::TextureType::Normal)) {
-                    uploadModelTextureIfNeeded(dev, pImpl->uploadQueue, pt.get(), pImpl->texCache,
-                                               tmp);
+                        uploadModelTextureIfNeeded(dev, pt.get(), pImpl->texCache,
+                                                   tmp);
                     if (tmp)
                         tNor = tmp;
                 }
                 if (auto pt =
                         d.material->getTexture(scrap::modeling::TextureType::MetallicRoughness)) {
-                    uploadModelTextureIfNeeded(dev, pImpl->uploadQueue, pt.get(), pImpl->texCache,
-                                               tmp);
+                        uploadModelTextureIfNeeded(dev, pt.get(), pImpl->texCache,
+                                                   tmp);
                     if (tmp)
                         tMr = tmp;
                 }
                 if (auto pt = d.material->getTexture(scrap::modeling::TextureType::Emissive)) {
-                    uploadModelTextureIfNeeded(dev, pImpl->uploadQueue, pt.get(), pImpl->texCache,
-                                               tmp);
+                        uploadModelTextureIfNeeded(dev, pt.get(), pImpl->texCache,
+                                                   tmp);
                     if (tmp)
                         tEmi = tmp;
                 }
                 if (auto pt = d.material->getTexture(scrap::modeling::TextureType::Occlusion)) {
-                    uploadModelTextureIfNeeded(dev, pImpl->uploadQueue, pt.get(), pImpl->texCache,
-                                               tmp);
+                        uploadModelTextureIfNeeded(dev, pt.get(), pImpl->texCache,
+                                                   tmp);
                     if (tmp)
                         tOcc = tmp;
                 }

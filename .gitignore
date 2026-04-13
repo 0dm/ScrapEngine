@@ -37,3 +37,4 @@ assets/*.hdr
 /build-ios-xcode/
 /build-macos/
 AGENTS.md
+/build-ios-simulator-xcode

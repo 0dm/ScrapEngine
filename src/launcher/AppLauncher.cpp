@@ -1,4 +1,5 @@
 #include <launcher/AppLauncher.hpp>
+#include <launcher/optionParser.hpp>
 
 #include <imgui.h>
 #include <imgui_stdlib.h>
@@ -114,9 +115,9 @@ namespace scrap::launcher {
         }
 
         std::array<float, 3> defaultModelRotationDegrees() {
-            return {static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_X_DEGREES),
-                    static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_Y_DEGREES),
-                    static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_Z_DEGREES)};
+            return {static_cast<float>(AppOptionsDefaults::DEFAULT_MODEL_ROTATE_X_DEGREES),
+                    static_cast<float>(AppOptionsDefaults::DEFAULT_MODEL_ROTATE_Y_DEGREES),
+                    static_cast<float>(AppOptionsDefaults::DEFAULT_MODEL_ROTATE_Z_DEGREES)};
         }
 
         std::string joinStrings(const std::vector<std::string>& values,

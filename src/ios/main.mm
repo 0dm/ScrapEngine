@@ -19,6 +19,16 @@ static_assert(scrap::gpu::kActiveBackend == scrap::gpu::BackendKind::Metal,
 
 namespace scrap_ios {
 
+    std::string bundleResourcePath(const char* relativePath) {
+        NSString* root = NSBundle.mainBundle.resourcePath;
+        if (root == nil || relativePath == nullptr) {
+            return {};
+        }
+        NSString* fullPath =
+            [root stringByAppendingPathComponent:[NSString stringWithUTF8String:relativePath]];
+        return fullPath != nil ? std::string(fullPath.UTF8String) : std::string{};
+    }
+
     class IOSPlatformView final : public scrap::platform::PlatformView {
       public:
         explicit IOSPlatformView(UIView* view)
@@ -353,9 +363,6 @@ namespace scrap_ios {
 
 - (void)didMoveToWindow {
     [super didMoveToWindow];
-    if (self.window != nil) {
-        [self becomeFirstResponder];
-    }
 }
 
 - (void)layoutSubviews {
@@ -479,6 +486,9 @@ namespace scrap_ios {
     [self.view layoutIfNeeded];
 
     _app = std::make_unique<scrap::ScrapEngineApp>();
+    _app->setLauncherEnabled(false);
+    _app->setSceneFile(scrap_ios::bundleResourcePath("testScene/jenga_tower.gltf"));
+    _app->setIBLFile(scrap_ios::bundleResourcePath("testScene/Newport_Loft_2k_derived.hdr"));
 
     try {
         const scrap::platform::FramebufferExtent extent = _platformView->getFramebufferExtent();

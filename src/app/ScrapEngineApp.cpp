@@ -285,9 +285,9 @@ namespace scrap {
         }
 
         std::array<float, 3> defaultModelRotationDegrees() {
-            return {static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_X_DEGREES),
-                    static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_Y_DEGREES),
-                    static_cast<float>(AppOptions::DEFAULT_MODEL_ROTATE_Z_DEGREES)};
+            return {static_cast<float>(AppOptionsDefaults::DEFAULT_MODEL_ROTATE_X_DEGREES),
+                    static_cast<float>(AppOptionsDefaults::DEFAULT_MODEL_ROTATE_Y_DEGREES),
+                    static_cast<float>(AppOptionsDefaults::DEFAULT_MODEL_ROTATE_Z_DEGREES)};
         }
 
         bool pathLooksLikeAuthoredScene(const std::string& scenePath) {
@@ -345,7 +345,9 @@ namespace scrap {
 
     ScrapEngineApp::ScrapEngineApp() {
         pImGuiComponentManager = std::make_unique<scrap::ui::ImGuiComponentManager>();
+#if !defined(SCRAP_IOS)
         pLauncher = std::make_unique<scrap::launcher::AppLauncher>();
+#endif
     }
 
     void ScrapEngineApp::setPhysicsTickRate(double hz) {
@@ -363,15 +365,22 @@ namespace scrap {
         this->platformView = &platformView;
         this->width = width;
         this->height = height;
+#if defined(SCRAP_IOS)
+        launcherActive = false;
+        launcherEnabled = false;
+#endif
         setCursorCapture(false);
         initMetal();
 
+#if !defined(SCRAP_IOS)
         if (launcherActive) {
             platformView.setWindowTitle(kLauncherWindowTitle);
             pLauncher->initialize(width, height, sceneFile, iblFile, polyHavenModelId,
                                   polyHavenModelResolution, polyHavenHdriId,
                                   polyHavenHdriResolution);
-        } else {
+        } else
+#endif
+        {
             std::string remoteError;
             if (!resolveConfiguredRemoteAssets(remoteError)) {
                 throw std::runtime_error(remoteError);
@@ -1052,11 +1061,14 @@ namespace scrap {
             advancePhysicsSimulation(deltaTime);
             updateClothMeshesMetal();
             syncMetalModelMatricesFromScene();
-        } else {
+        }
+#if !defined(SCRAP_IOS)
+        else {
             pLauncher->pollBackgroundTasks([this](const scrap::launcher::LaunchRequest& request) {
                 return finalizeLauncherLaunch(request);
             });
         }
+#endif
         refreshDebugStats(extent.width, extent.height);
         pMetalPresenter->renderDearImGuiFrame(
             *platformView, deltaTime, [this]() { buildExampleUI(); },
@@ -1188,6 +1200,7 @@ namespace scrap {
             clearImGuiFocusAfterLauncherHandoff = false;
         }
 
+#if !defined(SCRAP_IOS)
         if (launcherActive) {
             pLauncher->render(
                 [this](const scrap::launcher::LaunchRequest& request) {
@@ -1200,10 +1213,12 @@ namespace scrap {
                 });
             return;
         }
+#endif
 
         pImGuiComponentManager->renderAll();
     }
 
+#if !defined(SCRAP_IOS)
     bool ScrapEngineApp::finalizeLauncherLaunch(const scrap::launcher::LaunchRequest& request) {
         const bool resolutionChanged = request.width != width || request.height != height;
 
@@ -1241,8 +1256,17 @@ namespace scrap {
         worldDragImGuiUnblockFrames = 12;
         return true;
     }
+#endif
 
     bool ScrapEngineApp::resolveConfiguredRemoteAssets(std::string& errorMessage) {
+#if defined(SCRAP_IOS)
+        if (!polyHavenModelId.empty() || !polyHavenHdriId.empty()) {
+            errorMessage = "Poly Haven asset download is not available in iOS builds; use bundled "
+                           "scene/IBL paths.";
+            return false;
+        }
+        return true;
+#else
         if (!polyHavenModelId.empty()) {
             const auto modelDownload = scrap::launcher::downloadPolyHavenModelGltf(
                 polyHavenModelId, polyHavenModelResolution);
@@ -1267,6 +1291,7 @@ namespace scrap {
         }
 
         return true;
+#endif
     }
 
     bool ScrapEngineApp::loadConfiguredScene() {

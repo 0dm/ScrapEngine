@@ -9,11 +9,13 @@ AppOptions::AppOptions(int argc, char const** argv) : desc("Allowed options") {
 
     desc.add_options()("help", "produce help message")(
         "skip-launcher", po::bool_switch(&(this->skip_launcher)), "start the engine immediately")(
-        "width,w", po::value<unsigned int>(&(this->scr_width))->default_value(DEFAULT_SCR_WIDTH),
+        "width,w",
+        po::value<unsigned int>(&(this->scr_width))->default_value(AppOptionsDefaults::DEFAULT_SCR_WIDTH),
         "screen width")(
-        "height,h", po::value<unsigned int>(&(this->scr_height))->default_value(DEFAULT_SCR_HEIGHT),
+        "height,h",
+        po::value<unsigned int>(&(this->scr_height))->default_value(AppOptionsDefaults::DEFAULT_SCR_HEIGHT),
         "screen height")("tickrate,t",
-                         po::value<double>(&(this->tickrate))->default_value(DEFAULT_TICKRATE),
+                         po::value<double>(&(this->tickrate))->default_value(AppOptionsDefaults::DEFAULT_TICKRATE),
                          "physics simulation tick rate in Hz (fixed timestep dt = 1/tickrate)")(
         "model-rotate-x", po::value<double>(&(this->model_rotate_x_degrees)),
         "post-import model rotation around world X in degrees")(
@@ -60,7 +62,7 @@ AppOptions::AppOptions(int argc, char const** argv) : desc("Allowed options") {
     this->model_rotation_provided = hasExplicitRotation || hasLegacyRotation;
 
     if (hasLegacyRotation) {
-        std::string axis = AppOptions::DEFAULT_MODEL_ROTATION_AXIS;
+        std::string axis = AppOptionsDefaults::DEFAULT_MODEL_ROTATION_AXIS;
         if (vm.count("model-axis") > 0) {
             axis = vm["model-axis"].as<std::string>();
             std::transform(axis.begin(), axis.end(), axis.begin(),

@@ -1,4 +1,6 @@
 #include <launcher/LauncherCatalog.hpp>
+#include <launcher/AppOptionsDefaults.hpp>
+#include <launcher/optionParser.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -209,25 +211,25 @@ namespace scrap::launcher {
         std::ostringstream stream;
         stream << executableName << " --skip-launcher";
 
-        if (options.scr_width != AppOptions::DEFAULT_SCR_WIDTH) {
+        if (options.scr_width != AppOptionsDefaults::DEFAULT_SCR_WIDTH) {
             stream << " --width " << options.scr_width;
         }
-        if (options.scr_height != AppOptions::DEFAULT_SCR_HEIGHT) {
+        if (options.scr_height != AppOptionsDefaults::DEFAULT_SCR_HEIGHT) {
             stream << " --height " << options.scr_height;
         }
-        if (std::abs(options.tickrate - AppOptions::DEFAULT_TICKRATE) > 0.001) {
+        if (std::abs(options.tickrate - AppOptionsDefaults::DEFAULT_TICKRATE) > 0.001) {
             stream << " --tickrate " << options.tickrate;
         }
-        if (std::abs(options.model_rotate_x_degrees - AppOptions::DEFAULT_MODEL_ROTATE_X_DEGREES) >
-            0.001) {
+        if (std::abs(options.model_rotate_x_degrees -
+                     AppOptionsDefaults::DEFAULT_MODEL_ROTATE_X_DEGREES) > 0.001) {
             stream << " --model-rotate-x " << options.model_rotate_x_degrees;
         }
-        if (std::abs(options.model_rotate_y_degrees - AppOptions::DEFAULT_MODEL_ROTATE_Y_DEGREES) >
-            0.001) {
+        if (std::abs(options.model_rotate_y_degrees -
+                     AppOptionsDefaults::DEFAULT_MODEL_ROTATE_Y_DEGREES) > 0.001) {
             stream << " --model-rotate-y " << options.model_rotate_y_degrees;
         }
-        if (std::abs(options.model_rotate_z_degrees - AppOptions::DEFAULT_MODEL_ROTATE_Z_DEGREES) >
-            0.001) {
+        if (std::abs(options.model_rotate_z_degrees -
+                     AppOptionsDefaults::DEFAULT_MODEL_ROTATE_Z_DEGREES) > 0.001) {
             stream << " --model-rotate-z " << options.model_rotate_z_degrees;
         }
         if (!options.ibl_file.empty()) {
