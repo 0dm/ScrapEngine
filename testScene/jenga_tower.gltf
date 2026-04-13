@@ -82,7 +82,7 @@
     }
   ],
   "asset": {
-    "generator": "SauceEngine GLTFExporter",
+    "generator": "ScrapEngine GLTFExporter",
     "version": "2.0"
   },
   "bufferViews": [

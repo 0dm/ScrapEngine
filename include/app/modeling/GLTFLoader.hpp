@@ -3,10 +3,10 @@
 #include "app/modeling/Model.hpp"
 #include "app/modeling/TextureCache.hpp"
 #include <cstdint>
-#include <string>
-#include <vector>
 #include <memory>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 // Forward declaration to avoid including tinygltf in header
 namespace tinygltf {
@@ -17,96 +17,100 @@ namespace tinygltf {
     class Material;
     class Texture;
     class Image;
-}
+} // namespace tinygltf
 
-namespace sauce {
-namespace modeling {
+namespace scrap {
+    namespace modeling {
 
-struct LoadOptions {
-    bool generateNormals = true;      // Generate normals if missing
-    bool generateTangents = true;     // Generate tangents if missing
-    bool validateMeshes = true;       // Validate mesh data
-    bool loadTextures = true;         // Load texture data
-};
+        struct LoadOptions {
+            bool generateNormals = true;  // Generate normals if missing
+            bool generateTangents = true; // Generate tangents if missing
+            bool validateMeshes = true;   // Validate mesh data
+            bool loadTextures = true;     // Load texture data
+        };
 
-class GLTFLoader {
-public:
-    GLTFLoader();
-    explicit GLTFLoader(const LoadOptions& options);
+        class GLTFLoader {
+          public:
+            GLTFLoader();
+            explicit GLTFLoader(const LoadOptions& options);
 
-    // Load all scenes from a GLTF file
-    std::vector<std::shared_ptr<Model>> loadModels(const std::string& filePath);
+            // Load all scenes from a GLTF file
+            std::vector<std::shared_ptr<Model>> loadModels(const std::string& filePath);
 
-    // Load a specific scene from a GLTF file (default: scene 0)
-    std::shared_ptr<Model> loadModel(const std::string& filePath, size_t sceneIndex = 0);
+            // Load a specific scene from a GLTF file (default: scene 0)
+            std::shared_ptr<Model> loadModel(const std::string& filePath, size_t sceneIndex = 0);
 
-    // Get load options
-    const LoadOptions& getOptions() const { return options; }
-    void setOptions(const LoadOptions& options) { this->options = options; }
+            // Get load options
+            const LoadOptions& getOptions() const {
+                return options;
+            }
+            void setOptions(const LoadOptions& options) {
+                this->options = options;
+            }
 
-    // Get texture cache
-    TextureCache& getTextureCache() { return textureCache; }
-    const TextureCache& getTextureCache() const { return textureCache; }
+            // Get texture cache
+            TextureCache& getTextureCache() {
+                return textureCache;
+            }
+            const TextureCache& getTextureCache() const {
+                return textureCache;
+            }
 
-private:
-    LoadOptions options;
-    TextureCache textureCache;
-    std::unordered_map<uint64_t, std::shared_ptr<Mesh>> primitiveCache;
-    std::unordered_map<int, std::shared_ptr<Material>> materialCache;
+          private:
+            LoadOptions options;
+            TextureCache textureCache;
+            std::unordered_map<uint64_t, std::shared_ptr<Mesh>> primitiveCache;
+            std::unordered_map<int, std::shared_ptr<Material>> materialCache;
 
-    // Internal GLTF data during loading
-    std::string baseDirectory;
-    const tinygltf::Model* currentGltfModel;
+            // Internal GLTF data during loading
+            std::string baseDirectory;
+            const tinygltf::Model* currentGltfModel;
 
-    // Main processing functions
-    bool loadGltfFile(const std::string& filePath, tinygltf::Model& gltfModel);
-    std::shared_ptr<Model> processScene(const tinygltf::Model& gltfModel, int sceneIndex);
+            // Main processing functions
+            bool loadGltfFile(const std::string& filePath, tinygltf::Model& gltfModel);
+            std::shared_ptr<Model> processScene(const tinygltf::Model& gltfModel, int sceneIndex);
 
-    // Node processing
-    std::shared_ptr<ModelNode> processNode(const tinygltf::Model& gltfModel, int nodeIndex);
-    void processNodeChildren(const tinygltf::Model& gltfModel,
-                             const tinygltf::Node& gltfNode,
-                             std::shared_ptr<ModelNode> node);
+            // Node processing
+            std::shared_ptr<ModelNode> processNode(const tinygltf::Model& gltfModel, int nodeIndex);
+            void processNodeChildren(const tinygltf::Model& gltfModel,
+                                     const tinygltf::Node& gltfNode,
+                                     std::shared_ptr<ModelNode> node);
 
-    // Mesh processing
-    std::shared_ptr<Mesh> processPrimitive(const tinygltf::Model& gltfModel,
-                                           int meshIndex,
-                                           int primitiveIndex,
-                                           const tinygltf::Primitive& primitive);
-    void extractVertexAttribute(const tinygltf::Model& gltfModel,
+            // Mesh processing
+            std::shared_ptr<Mesh> processPrimitive(const tinygltf::Model& gltfModel, int meshIndex,
+                                                   int primitiveIndex,
+                                                   const tinygltf::Primitive& primitive);
+            void extractVertexAttribute(const tinygltf::Model& gltfModel,
+                                        const tinygltf::Primitive& primitive,
+                                        const std::string& attributeName,
+                                        std::vector<scrap::Vertex>& vertices, int componentIndex);
+            void extractIndices(const tinygltf::Model& gltfModel,
                                 const tinygltf::Primitive& primitive,
-                                const std::string& attributeName,
-                                std::vector<sauce::Vertex>& vertices,
-                                int componentIndex);
-    void extractIndices(const tinygltf::Model& gltfModel,
-                       const tinygltf::Primitive& primitive,
-                       std::vector<uint32_t>& indices);
+                                std::vector<uint32_t>& indices);
 
-    // Material processing
-    std::shared_ptr<Material> processMaterial(const tinygltf::Model& gltfModel, int materialIndex);
+            // Material processing
+            std::shared_ptr<Material> processMaterial(const tinygltf::Model& gltfModel,
+                                                      int materialIndex);
 
-    // Texture processing
-    std::shared_ptr<Texture> processTexture(const tinygltf::Model& gltfModel,
-                                            int textureIndex,
-                                            TextureType type,
-                                            bool sRGB);
-    std::shared_ptr<Texture> processImage(const tinygltf::Model& gltfModel,
-                                          int imageIndex,
-                                          TextureType type,
-                                          bool sRGB);
+            // Texture processing
+            std::shared_ptr<Texture> processTexture(const tinygltf::Model& gltfModel,
+                                                    int textureIndex, TextureType type, bool sRGB);
+            std::shared_ptr<Texture> processImage(const tinygltf::Model& gltfModel, int imageIndex,
+                                                  TextureType type, bool sRGB);
 
-    // KHR_lights_punctual
-    void parseLightsExtension(const tinygltf::Model& gltfModel);
-    void applyNodeLight(const tinygltf::Node& gltfNode, std::shared_ptr<ModelNode> node);
-    void applyNodeCloth(const tinygltf::Node& gltfNode, std::shared_ptr<ModelNode> node);
+            // KHR_lights_punctual
+            void parseLightsExtension(const tinygltf::Model& gltfModel);
+            void applyNodeLight(const tinygltf::Node& gltfNode, std::shared_ptr<ModelNode> node);
+            void applyNodeCloth(const tinygltf::Node& gltfNode, std::shared_ptr<ModelNode> node);
 
-    std::vector<LightInfo> parsedLights; // populated by parseLightsExtension
+            std::vector<LightInfo> parsedLights; // populated by parseLightsExtension
 
-    // Helper functions
-    Transform extractTransform(const tinygltf::Node& gltfNode);
-    template<typename T>
-    const T* getAccessorData(const tinygltf::Model& gltfModel, int accessorIndex, size_t& count);
-};
+            // Helper functions
+            Transform extractTransform(const tinygltf::Node& gltfNode);
+            template <typename T>
+            const T* getAccessorData(const tinygltf::Model& gltfModel, int accessorIndex,
+                                     size_t& count);
+        };
 
-} // namespace modeling
-} // namespace sauce
+    } // namespace modeling
+} // namespace scrap

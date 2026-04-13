@@ -2,10 +2,10 @@
 
 #include <app/ClothSettings.hpp>
 
-namespace sauce::modeling {
+namespace scrap::modeling {
 
-struct ClothInfo {
-  sauce::ClothSettings settings;
-};
+    struct ClothInfo {
+        scrap::ClothSettings settings;
+    };
 
-} // namespace sauce::modeling
+} // namespace scrap::modeling

@@ -4,6 +4,7 @@ CMakeUserPresets.json
 build/
 build-debug/
 build-release/
+.tmp_layout_check
 .vscode
 vcpkg_installed
 run.sh
@@ -19,6 +20,7 @@ coverage*
 *.profraw
 .cache
 shaders/*.spv
+scrapengine_settings.json
 sauceengine_settings.json
 
 
@@ -29,8 +31,9 @@ ModelLoader.cpp
 imgui.ini
 imgui.ini
 /temp_scene_extract
-/assets
+assets/*.hdr
 .DS_Store
 /build-ios-device/
 /build-ios-xcode/
 /build-macos/
+AGENTS.md

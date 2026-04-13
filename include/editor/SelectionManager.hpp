@@ -2,23 +2,31 @@
 
 #include <app/Entity.hpp>
 
-namespace sauce {
-class Scene;
+namespace scrap {
+    class Scene;
 }
 
-namespace sauce::editor {
+namespace scrap::editor {
 
-class SelectionManager {
-public:
-  void select(int index) { selectedIndex = index; }
-  void deselect() { selectedIndex = -1; }
-  int getSelectedIndex() const { return selectedIndex; }
-  bool hasSelection() const { return selectedIndex >= 0; }
+    class SelectionManager {
+      public:
+        void select(int index) {
+            selectedIndex = index;
+        }
+        void deselect() {
+            selectedIndex = -1;
+        }
+        int getSelectedIndex() const {
+            return selectedIndex;
+        }
+        bool hasSelection() const {
+            return selectedIndex >= 0;
+        }
 
-  sauce::Entity* getSelectedEntity(sauce::Scene& scene);
+        scrap::Entity* getSelectedEntity(scrap::Scene& scene);
 
-private:
-  int selectedIndex = -1;
-};
+      private:
+        int selectedIndex = -1;
+    };
 
-} // namespace sauce::editor
+} // namespace scrap::editor

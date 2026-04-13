@@ -4,11 +4,10 @@
 #include <array>
 #include <string>
 
-// Program options imports
 #include <boost/program_options/options_description.hpp>
-#include <boost/program_options/variables_map.hpp>
-#include <boost/program_options/positional_options.hpp>
 #include <boost/program_options/parsers.hpp>
+#include <boost/program_options/positional_options.hpp>
+#include <boost/program_options/variables_map.hpp>
 
 struct AppOptions {
     static constexpr unsigned int DEFAULT_SCR_WIDTH = 1280;
@@ -36,32 +35,24 @@ struct AppOptions {
     bool help;
 
     std::array<double, 3> defaultModelRotationDegrees() const {
-        return {DEFAULT_MODEL_ROTATE_X_DEGREES, DEFAULT_MODEL_ROTATE_Y_DEGREES, DEFAULT_MODEL_ROTATE_Z_DEGREES};
+        return {DEFAULT_MODEL_ROTATE_X_DEGREES, DEFAULT_MODEL_ROTATE_Y_DEGREES,
+                DEFAULT_MODEL_ROTATE_Z_DEGREES};
     }
 
-    AppOptions(int argc, const char *argv[]);
+    AppOptions(int argc, const char* argv[]);
     AppOptions()
-        : scr_width(DEFAULT_SCR_WIDTH),
-          scr_height(DEFAULT_SCR_HEIGHT),
-          tickrate(DEFAULT_TICKRATE),
+        : scr_width(DEFAULT_SCR_WIDTH), scr_height(DEFAULT_SCR_HEIGHT), tickrate(DEFAULT_TICKRATE),
           model_rotate_x_degrees(DEFAULT_MODEL_ROTATE_X_DEGREES),
           model_rotate_y_degrees(DEFAULT_MODEL_ROTATE_Y_DEGREES),
-          model_rotate_z_degrees(DEFAULT_MODEL_ROTATE_Z_DEGREES),
-          scene_file(),
-          camera_collide(false),
-          ibl_file(),
-          polyhaven_model_id(),
-          polyhaven_model_resolution("2k"),
-          polyhaven_hdri_id(),
-          polyhaven_hdri_resolution("4k"),
-          model_rotation_provided(false),
-          skip_launcher(false),
-          help(false),
-          desc("Allowed options") {}
+          model_rotate_z_degrees(DEFAULT_MODEL_ROTATE_Z_DEGREES), scene_file(),
+          camera_collide(false), ibl_file(), polyhaven_model_id(), polyhaven_model_resolution("2k"),
+          polyhaven_hdri_id(), polyhaven_hdri_resolution("4k"), model_rotation_provided(false),
+          skip_launcher(false), help(false), desc("Allowed options") {
+    }
 
     boost::program_options::options_description getHelpMessage() const;
 
-private:
+  private:
     boost::program_options::options_description desc;
 };
 

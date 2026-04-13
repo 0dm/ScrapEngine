@@ -1,0 +1,32 @@
+name: Clang Format
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  clang-format:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format
+
+      - name: Run clang-format check
+        run: |
+          bash cmake/clang-format-run.bash
+          if ! git diff --quiet; then
+            echo "clang-format produced changes. Run: cmake --build <build-dir> --target format"
+            echo "(or: bash cmake/clang-format-run.bash) then commit."
+            git diff
+            exit 1
+          fi

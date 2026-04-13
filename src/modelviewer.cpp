@@ -1,8 +1,8 @@
-#include <iostream>
 #include <chrono>
+#include <cstdlib>
+#include <iostream>
 #include <memory>
 #include <stdexcept>
-#include <cstdlib>
 
 #define VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
 #include <vulkan/vulkan.hpp>
@@ -13,15 +13,20 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#include <app/Instance.hpp>
-#include <app/PhysicalDevice.hpp>
-#include <app/LogicalDevice.hpp>
-#include <app/platform/PlatformWindow.hpp>
-#include <app/RenderSurface.hpp>
 #include <app/Camera.hpp>
-#include <app/Renderer.hpp>
-#include <app/ModelViewerRenderer.hpp>
-#include <app/ImGuiRenderer.hpp>
+#include <app/platform/PlatformWindow.hpp>
+#include <gpu/vulkan/ImGuiRenderer.hpp>
+#include <gpu/vulkan/Instance.hpp>
+#include <gpu/vulkan/LogicalDevice.hpp>
+#include <gpu/vulkan/ModelViewerRenderer.hpp>
+#include <gpu/vulkan/PhysicalDevice.hpp>
+#include <gpu/vulkan/RenderSurface.hpp>
+#include <gpu/vulkan/Renderer.hpp>
+
+#include <gpu/Backend.hpp>
+
+static_assert(scrap::gpu::kActiveBackend == scrap::gpu::BackendKind::Vulkan,
+              "Model viewer uses gpu/vulkan.");
 
 // Disable validation layers (requires VK_LAYER_KHRONOS_validation to be installed)
 constexpr bool enableValidationLayers = false;
@@ -30,176 +35,179 @@ constexpr uint32_t WIDTH = 1280;
 constexpr uint32_t HEIGHT = 720;
 
 class ModelViewerApp {
-public:
-  ModelViewerApp(const std::string& modelPath) : modelPath(modelPath) {}
-
-  void run() {
-    initWindow();
-    initVulkan();
-    loadModel();
-    mainLoop();
-  }
-
-  ~ModelViewerApp() {
-    if (*logicalDevice != nullptr) {
-      logicalDevice->waitIdle();
-    }
-  }
-
-private:
-  std::unique_ptr<sauce::platform::PlatformWindow> window;
-  std::string modelPath;
-
-  std::unique_ptr<sauce::Instance> pInstance;
-  std::unique_ptr<sauce::RenderSurface> pRenderSurface;
-
-  sauce::PhysicalDevice physicalDevice = nullptr;
-  sauce::LogicalDevice logicalDevice = nullptr;
-
-  std::unique_ptr<sauce::Camera> pCamera;
-  std::unique_ptr<sauce::ModelViewerRenderer> pRenderer;
-  std::unique_ptr<sauce::ImGuiRenderer> pImGuiRenderer;
-
-  void initWindow() {
-    window = sauce::platform::createPlatformWindow({
-        .title = "Model Viewer",
-        .width = WIDTH,
-        .height = HEIGHT,
-        .resizable = false,
-        .acceptFileDrops = false,
-    });
-  }
-
-  void initVulkan() {
-    pInstance = std::make_unique<sauce::Instance>();
-
-    pRenderSurface = std::make_unique<sauce::RenderSurface>(*pInstance, window->getMetalLayerHandle());
-
-    physicalDevice = { *pInstance };
-    logicalDevice = { physicalDevice, *pRenderSurface };
-
-    // Create camera positioned to view the model
-    sauce::CameraCreateInfo cameraCreateInfo {
-      .scrWidth = static_cast<float>(WIDTH),
-      .scrHeight = static_cast<float>(HEIGHT),
-      .pos = { 0.0f, 2.0f, 5.0f },
-      .fov = 60.0f,
-    };
-    pCamera = std::make_unique<sauce::Camera>(cameraCreateInfo);
-
-    // Initialize camera to look at origin
-    pCamera->lookAt(glm::vec3(0.0f, 2.0f, 5.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-
-    // Create renderer
-    sauce::RendererCreateInfo rendererCreateInfo {
-      .physicalDevice = physicalDevice,
-      .logicalDevice = logicalDevice,
-      .renderSurface = *pRenderSurface,
-      .platformView = *window,
-    };
-    pRenderer = std::make_unique<sauce::ModelViewerRenderer>(rendererCreateInfo);
-
-    // Initialize ImGui
-    sauce::ImGuiRendererCreateInfo imguiCreateInfo {
-      .instance = **pInstance,
-      .physicalDevice = physicalDevice,
-      .logicalDevice = logicalDevice,
-      .queueFamilyIndex = logicalDevice.getQueueIndex(),
-      .platformView = *window,
-      .queue = pRenderer->getQueue(),
-      .commandPool = pRenderer->getCommandPool(),
-      .swapChain = pRenderer->getSwapChain(),
-      .imageCount = static_cast<uint32_t>(pRenderer->getSwapChain().getImages().size()),
-      .swapChainFormat = pRenderer->getSwapChain().getSurfaceFormat().format,
-      .depthFormat = sauce::GraphicsPipeline::findDepthFormat(physicalDevice),
-    };
-    pImGuiRenderer = std::make_unique<sauce::ImGuiRenderer>(imguiCreateInfo);
-  }
-
-  void loadModel() {
-    std::cout << "Loading model: " << modelPath << std::endl;
-    pRenderer->loadModel(modelPath, physicalDevice, logicalDevice);
-  }
-
-  void updateCamera(float time) {
-    // Orbital camera: rotate around the origin
-    float orbitAngle = time * glm::radians(30.0f); // 30 degrees per second
-    float distance = 5.0f;
-
-    float camX = distance * sin(orbitAngle);
-    float camZ = distance * cos(orbitAngle);
-    float camY = 2.0f;
-
-    glm::vec3 cameraPos(camX, camY, camZ);
-    glm::vec3 target(0.0f, 0.0f, 0.0f);
-    glm::vec3 up(0.0f, 1.0f, 0.0f);
-
-    pCamera->lookAt(cameraPos, target, up);
-  }
-
-  void buildUI(float fps) {
-    ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(200, 80), ImGuiCond_FirstUseEver);
-
-    ImGui::Begin("Model Viewer Stats");
-    ImGui::Text("FPS: %.1f", fps);
-    ImGui::Text("Frame Time: %.2f ms", 1000.0f / fps);
-    ImGui::End();
-  }
-
-  void mainLoop() {
-    auto startTime = std::chrono::high_resolution_clock::now();
-    auto lastFrameTime = startTime;
-    float fps = 0.0f;
-
-    while (!window->shouldClose()) {
-      window->pumpEvents();
-
-      auto currentTime = std::chrono::high_resolution_clock::now();
-      float time = std::chrono::duration<float>(currentTime - startTime).count();
-
-      // Calculate FPS
-      float frameDelta = std::chrono::duration<float>(currentTime - lastFrameTime).count();
-      if (frameDelta > 0.0f) {
-        fps = 1.0f / frameDelta;
-      }
-      lastFrameTime = currentTime;
-
-      // Update orbital camera
-      updateCamera(time);
-
-      // Model rotation: 45 degrees per second
-      float modelRotation = time * glm::radians(45.0f);
-
-      // Build UI
-      pImGuiRenderer->newFrame(frameDelta);
-      buildUI(fps);
-
-      // Render frame
-      pRenderer->drawFrame(logicalDevice, *pCamera, modelRotation, pImGuiRenderer.get());
+  public:
+    ModelViewerApp(const std::string& modelPath) : modelPath(modelPath) {
     }
 
-    logicalDevice->waitIdle();
-  }
+    void run() {
+        initWindow();
+        initVulkan();
+        loadModel();
+        mainLoop();
+    }
+
+    ~ModelViewerApp() {
+        if (*logicalDevice != nullptr) {
+            logicalDevice->waitIdle();
+        }
+    }
+
+  private:
+    std::unique_ptr<scrap::platform::PlatformWindow> window;
+    std::string modelPath;
+
+    std::unique_ptr<scrap::Instance> pInstance;
+    std::unique_ptr<scrap::RenderSurface> pRenderSurface;
+
+    scrap::PhysicalDevice physicalDevice = nullptr;
+    scrap::LogicalDevice logicalDevice = nullptr;
+
+    std::unique_ptr<scrap::Camera> pCamera;
+    std::unique_ptr<scrap::ModelViewerRenderer> pRenderer;
+    std::unique_ptr<scrap::ImGuiRenderer> pImGuiRenderer;
+
+    void initWindow() {
+        window = scrap::platform::createPlatformWindow({
+            .title = "Model Viewer",
+            .width = WIDTH,
+            .height = HEIGHT,
+            .resizable = false,
+            .acceptFileDrops = false,
+        });
+    }
+
+    void initVulkan() {
+        pInstance = std::make_unique<scrap::Instance>();
+
+        pRenderSurface =
+            std::make_unique<scrap::RenderSurface>(*pInstance, window->getMetalLayerHandle());
+
+        physicalDevice = {*pInstance};
+        logicalDevice = {physicalDevice, *pRenderSurface};
+
+        // Create camera positioned to view the model
+        scrap::CameraCreateInfo cameraCreateInfo{
+            .scrWidth = static_cast<float>(WIDTH),
+            .scrHeight = static_cast<float>(HEIGHT),
+            .pos = {0.0f, 2.0f, 5.0f},
+            .fov = 60.0f,
+        };
+        pCamera = std::make_unique<scrap::Camera>(cameraCreateInfo);
+
+        // Initialize camera to look at origin
+        pCamera->lookAt(glm::vec3(0.0f, 2.0f, 5.0f), glm::vec3(0.0f, 0.0f, 0.0f),
+                        glm::vec3(0.0f, 1.0f, 0.0f));
+
+        // Create renderer
+        scrap::RendererCreateInfo rendererCreateInfo{
+            .physicalDevice = physicalDevice,
+            .logicalDevice = logicalDevice,
+            .renderSurface = *pRenderSurface,
+            .platformView = *window,
+        };
+        pRenderer = std::make_unique<scrap::ModelViewerRenderer>(rendererCreateInfo);
+
+        // Initialize ImGui
+        scrap::ImGuiRendererCreateInfo imguiCreateInfo{
+            .instance = **pInstance,
+            .physicalDevice = physicalDevice,
+            .logicalDevice = logicalDevice,
+            .queueFamilyIndex = logicalDevice.getQueueIndex(),
+            .platformView = *window,
+            .queue = pRenderer->getQueue(),
+            .commandPool = pRenderer->getCommandPool(),
+            .swapChain = pRenderer->getSwapChain(),
+            .imageCount = static_cast<uint32_t>(pRenderer->getSwapChain().getImages().size()),
+            .swapChainFormat = pRenderer->getSwapChain().getSurfaceFormat().format,
+            .depthFormat = scrap::GraphicsPipeline::findDepthFormat(physicalDevice),
+        };
+        pImGuiRenderer = std::make_unique<scrap::ImGuiRenderer>(imguiCreateInfo);
+    }
+
+    void loadModel() {
+        std::cout << "Loading model: " << modelPath << std::endl;
+        pRenderer->loadModel(modelPath, physicalDevice, logicalDevice);
+    }
+
+    void updateCamera(float time) {
+        // Orbital camera: rotate around the origin
+        float orbitAngle = time * glm::radians(30.0f); // 30 degrees per second
+        float distance = 5.0f;
+
+        float camX = distance * sin(orbitAngle);
+        float camZ = distance * cos(orbitAngle);
+        float camY = 2.0f;
+
+        glm::vec3 cameraPos(camX, camY, camZ);
+        glm::vec3 target(0.0f, 0.0f, 0.0f);
+        glm::vec3 up(0.0f, 1.0f, 0.0f);
+
+        pCamera->lookAt(cameraPos, target, up);
+    }
+
+    void buildUI(float fps) {
+        ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(200, 80), ImGuiCond_FirstUseEver);
+
+        ImGui::Begin("Model Viewer Stats");
+        ImGui::Text("FPS: %.1f", fps);
+        ImGui::Text("Frame Time: %.2f ms", 1000.0f / fps);
+        ImGui::End();
+    }
+
+    void mainLoop() {
+        auto startTime = std::chrono::high_resolution_clock::now();
+        auto lastFrameTime = startTime;
+        float fps = 0.0f;
+
+        while (!window->shouldClose()) {
+            window->pumpEvents();
+
+            auto currentTime = std::chrono::high_resolution_clock::now();
+            float time = std::chrono::duration<float>(currentTime - startTime).count();
+
+            // Calculate FPS
+            float frameDelta = std::chrono::duration<float>(currentTime - lastFrameTime).count();
+            if (frameDelta > 0.0f) {
+                fps = 1.0f / frameDelta;
+            }
+            lastFrameTime = currentTime;
+
+            // Update orbital camera
+            updateCamera(time);
+
+            // Model rotation: 45 degrees per second
+            float modelRotation = time * glm::radians(45.0f);
+
+            // Build UI
+            pImGuiRenderer->newFrame(frameDelta);
+            buildUI(fps);
+
+            // Render frame
+            pRenderer->drawFrame(logicalDevice, *pCamera, modelRotation, pImGuiRenderer.get());
+        }
+
+        logicalDevice->waitIdle();
+    }
 };
 
 int main(int argc, char* argv[]) {
-  std::string modelPath = "assets/models/monkey.gltf";
+    std::string modelPath = "assets/models/monkey.gltf";
 
-  if (argc > 1) {
-    modelPath = argv[1];
-  }
+    if (argc > 1) {
+        modelPath = argv[1];
+    }
 
-  std::cout << "Model Viewer" << std::endl;
-  std::cout << "Loading: " << modelPath << std::endl;
+    std::cout << "Model Viewer" << std::endl;
+    std::cout << "Loading: " << modelPath << std::endl;
 
-  ModelViewerApp app(modelPath);
-  try {
-    app.run();
-  } catch (std::exception& e) {
-    std::cerr << "Error: " << e.what() << std::endl;
-    return EXIT_FAILURE;
-  }
+    ModelViewerApp app(modelPath);
+    try {
+        app.run();
+    } catch (std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return EXIT_FAILURE;
+    }
 
-  return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }

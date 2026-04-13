@@ -1,13 +1,12 @@
 #include "app/components/TransformComponent.hpp"
 
-namespace sauce {
+namespace scrap {
 
-TransformComponent::TransformComponent()
-    : transform() {
-}
+    TransformComponent::TransformComponent() : transform() {
+    }
 
-TransformComponent::TransformComponent(const modeling::Transform& transform)
-    : transform(transform) {
-}
+    TransformComponent::TransformComponent(const modeling::Transform& transform)
+        : transform(transform) {
+    }
 
-} // namespace sauce
+} // namespace scrap

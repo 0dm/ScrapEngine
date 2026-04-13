@@ -13,13 +13,16 @@
     {
       "name": "macos-vcpkg",
       "inherits": "vcpkg",
-      "binaryDir": "${sourceDir}/build-macos",
+      "displayName": "macOS (arm64)",
+      "description": "Primary ScrapEngine preset; configure + build under ./build",
       "cacheVariables": {
-        "VCPKG_INSTALLED_DIR": "${sourceDir}/build-macos/vcpkg_installed",
-        "VCPKG_TARGET_TRIPLET": "arm64-osx",
-        "Vulkan_INCLUDE_DIR": "$env{VULKAN_SDK}/macOS/include",
-        "Vulkan_LIBRARY": "$env{VULKAN_SDK}/macOS/lib/libvulkan.dylib"
+        "VCPKG_TARGET_TRIPLET": "arm64-osx"
       }
+    },
+    {
+      "name": "default",
+      "inherits": "macos-vcpkg",
+      "displayName": "Default (macOS)"
     },
     {
       "name": "ios-vcpkg",
@@ -29,9 +32,7 @@
       "cacheVariables": {
         "CMAKE_SYSTEM_NAME": "iOS",
         "VCPKG_INSTALLED_DIR": "${sourceDir}/build-ios-xcode/vcpkg_installed",
-        "VCPKG_TARGET_TRIPLET": "arm64-ios",
-        "Vulkan_INCLUDE_DIR": "$env{VULKAN_SDK}/macOS/include",
-        "Vulkan_LIBRARY": "$env{VULKAN_SDK}/iOS/lib/vulkan.framework/vulkan"
+        "VCPKG_TARGET_TRIPLET": "arm64-ios"
       }
     }
   ]

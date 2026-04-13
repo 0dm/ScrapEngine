@@ -1,114 +1,61 @@
-## How to build?
+# ScrapEngine
 
-### Step 0: Download CMake
+Apple-only C++23 graphics and physics engine. Main app uses Metal. Scene/editor code is still mixed between newer Metal work and older Vulkan-era code.
 
-This can be done using 
-Mac command
-```
-brew install cmake
-```
+features:
+- ECS-style scene and components
+- forward PBR rendering
+- image-based lighting and skybox
+- XPBD rigid body and cloth physics
+- Dear ImGui debug UI
+- glTF scene loading
 
-Windows go to that link and follow the steps
+# Platforms
+- macOS
+- iOS
 
-https://cmake.org/download/
+# Build
 
-download the source distribution and then use the default install settings.
+Needs:
+- CMake 3.30+
+- `vcpkg`
+- `slangc` on `PATH`
 
-### Step 0.5: Install Vulkan SDK
+Example:
 
-Download the Vulkan SDK from here: https://vulkan.lunarg.com/sdk/home
-
-After installing, you need to enable the environment variables so CMake and the application can find the Vulkan headers and libraries. 
-
-(For Mac users) Add the following to your shell configuration (e.g., `~/.zshrc` or `~/.bashrc`), replacing the path with your actual installation path and version:
-
-```sh
-source ".../VulkanSDK/<VulkanSDK-version>/setup-env.sh"
-```
-
-### Step 1: Download and set up vcpkg
-
-Download vcpkg anywhere on your computer (not in our repo):
-```git clone https://github.com/microsoft/vcpkg.git```
-
-Then run the bootstrap script
-```cd vcpkg && ./bootstrap-vcpkg.sh```
-
-Then setup the following variables
-```
+```bash
 export VCPKG_ROOT=/path/to/vcpkg
-export PATH=$VCPKG_ROOT:$PATH
-```
-I would suggest you try to make the above variables persistent, 
-but you might possibly run into issues with VS Code CMake extension not recognizing these.
-
-### Step 2: Clone the repo
-
-git clone https://github.com/P0k3rf4ce/SauceEngine.git
-
-### Step 3: Set up a CMakeUserPresets.json file
-
-In the root directory of the repo, create a file names `CMakeUserPresets.json`.
-This file should have the following content:
-```
-{
-    "version": 2,
-    "configurePresets": [{
-        "name": "default",
-        "generator": "Ninja",
-        "inherits": "vcpkg",
-        "environment": {
-            "VCPKG_ROOT": "<ENTER PATH TO VCPKG HERE>"
-        }
-    }]
-}
-```
-where you must replace the path to vcpkg obviously.
-The existing `CMakePresets.json` file uses the environment setup by `CMakeUserPresets.json`.
-
-
-Note that you might need to change up the generator that you use, this is what Nimish did which worked for him. The generator was changed from Ninja for him to Unix makefiles 
-
-CMakePresets file 
-```
-{
-  "version": 2,
-  "configurePresets": [
-    {
-      "name": "vcpkg",
-      "binaryDir": "${sourceDir}/build",
-      "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-      }
-    }
-  ]
-}
-
+cmake -S . -B build \
+  -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+  -DVCPKG_INSTALLED_DIR="$PWD/build/vcpkg_installed" \
+  -DVCPKG_TARGET_TRIPLET=arm64-osx
+cmake --build build --target ScrapEngine
 ```
 
-CMakeUserPresets file
+You can also use `CMakePresets.json` if your local CMake handles the presets cleanly.
+
+# Run
+
+```bash
+./build/ScrapEngine.app/Contents/MacOS/ScrapEngine \
+  --ibl path/to/sky.hdr \
+  path/to/scene.gltf
 ```
-{
-    "version": 2,
-    "configurePresets": [{
-        "name": "default",
-        "generator": "Unix Makefiles",
-        "inherits": "vcpkg",
-        "environment": {
-            "VCPKG_ROOT": "<PATH TO vcpkg>"
-        }
-    }]
-}
 
-```
-### Step 4: Configure, Build, and Run!
+Run `--help` for the rest of the flags.
 
-I highly recommend using the VS Code CMake extension to do this.
-Otherwise, I suggest looking online on how to compile with CMake.
-Note that the current setup uses the `default` preset 
-(i.e. you'll need to configure with `--preset default` or something).
+# Repo layout
+- `src/app/` app, scene, components, platform code
+- `src/gpu/metal/` Metal renderer, IBL, presentation
+- `src/physics/` XPBD physics
+- `src/launcher/` launcher and CLI
+- `shaders/` shader sources
+- `assets/` bundled assets
 
-The compiled executable will be in the `build` directory.
+# Notes
+- This project started from [SauceEngine](https://github.com/P0k3rf4ce/SauceEngine) but has been rewritten a lot.
+- `src/editor/` and some Vulkan-era files are still in the repo, but they are not the main path right now.
 
-### References
-- https://learn.microsoft.com/en-us/vcpkg/get_started/get-started?pivots=shell-bash
+# License
+
+See `LICENSE` if present.

@@ -1,12 +1,11 @@
-#include <iostream>
 #include <chrono>
 #include <filesystem>
 #include <functional>
+#include <iostream>
 #include <vector>
 
-#include <launcher/optionParser.hpp>
 #include <app/Log.hpp>
-#include <app/SauceEngineApp.hpp>
+#include <app/ScrapEngineApp.hpp>
 #include <app/platform/PlatformWindow.hpp>
 #include <app/ui/ImGuiComponentManager.hpp>
 #include <app/ui/components/Button.hpp>
@@ -15,93 +14,89 @@
 #include <app/ui/components/PlotLines.hpp>
 #include <app/ui/components/ProgressBar.hpp>
 #include <app/ui/components/Tooltip.hpp>
+#include <launcher/optionParser.hpp>
 
 namespace {
 
-/// Resolve relative paths against the shell's current directory before any code (e.g. macOS
-/// createPlatformWindow) changes the process working directory to the bundle's MacOS folder.
-std::string anchorUserFilePath(const std::string& path) {
-  if (path.empty()) {
-    return path;
-  }
-  namespace fs = std::filesystem;
-  const fs::path p(path);
-  if (p.is_absolute()) {
-    return p.lexically_normal().string();
-  }
-  return fs::absolute(p).lexically_normal().string();
-}
+    std::string anchorUserFilePath(const std::string& path) {
+        if (path.empty()) {
+            return path;
+        }
+        namespace fs = std::filesystem;
+        const fs::path p(path);
+        if (p.is_absolute()) {
+            return p.lexically_normal().string();
+        }
+        return fs::absolute(p).lexically_normal().string();
+    }
 
 } // namespace
 
-int main(int argc, const char *argv[]) {
-  sauce::Log::init();
-  const AppOptions ops(argc, argv);
+int main(int argc, const char* argv[]) {
+    scrap::Log::init();
+    const AppOptions ops(argc, argv);
 
-  if (ops.help) {
-    std::cout << "Usage: " << argv[0] << " <options> [scene_file]" << std::endl;
-    std::cout << ops.getHelpMessage() << std::endl;
-    sauce::Log::shutdown();
-    return 1;
-  }
+    if (ops.help) {
+        std::cout << "Usage: " << argv[0] << " <options> [scene_file]" << std::endl;
+        std::cout << ops.getHelpMessage() << std::endl;
+        scrap::Log::shutdown();
+        return 1;
+    }
 
-  const std::string scenePath = anchorUserFilePath(ops.scene_file);
-  const std::string iblPath = anchorUserFilePath(ops.ibl_file);
-  const bool hasDirectLaunchSelection =
-      !scenePath.empty() ||
-      !iblPath.empty() ||
-      !ops.polyhaven_model_id.empty() ||
-      !ops.polyhaven_hdri_id.empty() ||
-      ops.model_rotation_provided;
-  const bool shouldShowLauncher = !ops.skip_launcher && !hasDirectLaunchSelection;
+    const std::string scenePath = anchorUserFilePath(ops.scene_file);
+    const std::string iblPath = anchorUserFilePath(ops.ibl_file);
+    const bool hasDirectLaunchSelection =
+        !scenePath.empty() || !iblPath.empty() || !ops.polyhaven_model_id.empty() ||
+        !ops.polyhaven_hdri_id.empty() || ops.model_rotation_provided;
+    const bool shouldShowLauncher = !ops.skip_launcher && !hasDirectLaunchSelection;
 
-  sauce::SauceEngineApp mainApp;
-  auto window = sauce::platform::createPlatformWindow({
-      .title = shouldShowLauncher ? "SauceEngine Launcher" : "SauceEngine",
-      .width = ops.scr_width,
-      .height = ops.scr_height,
-      .resizable = true,
-      .acceptFileDrops = false,
-  });
-  try {
-    if (!scenePath.empty()) {
-      mainApp.setSceneFile(scenePath);
-    }
-    mainApp.setCameraCollisionEnabled(ops.camera_collide);
-    if (!iblPath.empty()) {
-      mainApp.setIBLFile(iblPath);
-    }
-    mainApp.setPhysicsTickRate(ops.tickrate);
-    mainApp.setModelRotationDegrees(
-        {static_cast<float>(ops.model_rotate_x_degrees),
-         static_cast<float>(ops.model_rotate_y_degrees),
-         static_cast<float>(ops.model_rotate_z_degrees)},
-        ops.model_rotation_provided);
-    if (!ops.polyhaven_model_id.empty()) {
-      mainApp.setPolyHavenModelSelection(ops.polyhaven_model_id, ops.polyhaven_model_resolution);
-    }
-    if (!ops.polyhaven_hdri_id.empty()) {
-      mainApp.setPolyHavenHdriSelection(ops.polyhaven_hdri_id, ops.polyhaven_hdri_resolution);
-    }
-    mainApp.setLauncherEnabled(shouldShowLauncher);
-    mainApp.initialize(*window, ops.scr_width, ops.scr_height);
+    scrap::ScrapEngineApp mainApp;
+    auto window = scrap::platform::createPlatformWindow({
+        .title = shouldShowLauncher ? "ScrapEngine Launcher" : "ScrapEngine",
+        .width = ops.scr_width,
+        .height = ops.scr_height,
+        .resizable = true,
+        .acceptFileDrops = false,
+    });
+    try {
+        if (!scenePath.empty()) {
+            mainApp.setSceneFile(scenePath);
+        }
+        mainApp.setCameraCollisionEnabled(ops.camera_collide);
+        if (!iblPath.empty()) {
+            mainApp.setIBLFile(iblPath);
+        }
+        mainApp.setPhysicsTickRate(ops.tickrate);
+        mainApp.setModelRotationDegrees({static_cast<float>(ops.model_rotate_x_degrees),
+                                         static_cast<float>(ops.model_rotate_y_degrees),
+                                         static_cast<float>(ops.model_rotate_z_degrees)},
+                                        ops.model_rotation_provided);
+        if (!ops.polyhaven_model_id.empty()) {
+            mainApp.setPolyHavenModelSelection(ops.polyhaven_model_id,
+                                               ops.polyhaven_model_resolution);
+        }
+        if (!ops.polyhaven_hdri_id.empty()) {
+            mainApp.setPolyHavenHdriSelection(ops.polyhaven_hdri_id, ops.polyhaven_hdri_resolution);
+        }
+        mainApp.setLauncherEnabled(shouldShowLauncher);
+        mainApp.initialize(*window, ops.scr_width, ops.scr_height);
 
-    auto lastFrameTime = std::chrono::steady_clock::now();
-    while (!window->shouldClose()) {
-      window->pumpEvents();
-      const auto currentFrameTime = std::chrono::steady_clock::now();
-      const float deltaTime =
-          std::chrono::duration<float>(currentFrameTime - lastFrameTime).count();
-      lastFrameTime = currentFrameTime;
-      mainApp.tick(deltaTime);
+        auto lastFrameTime = std::chrono::steady_clock::now();
+        while (!window->shouldClose()) {
+            window->pumpEvents();
+            const auto currentFrameTime = std::chrono::steady_clock::now();
+            const float deltaTime =
+                std::chrono::duration<float>(currentFrameTime - lastFrameTime).count();
+            lastFrameTime = currentFrameTime;
+            mainApp.tick(deltaTime);
+        }
+        mainApp.shutdown();
+    } catch (std::exception& e) {
+        mainApp.shutdown();
+        scrap::Log::shutdown();
+        std::cerr << e.what() << std::endl;
+        return EXIT_FAILURE;
     }
-    mainApp.shutdown();
-  } catch (std::exception& e) {
-    mainApp.shutdown();
-    sauce::Log::shutdown();
-    std::cerr << e.what() << std::endl;
-    return EXIT_FAILURE;
-  }
-  sauce::Log::shutdown();
-  return EXIT_SUCCESS;
+    scrap::Log::shutdown();
+    return EXIT_SUCCESS;
 }

@@ -1,111 +1,81 @@
 #pragma once
 
-#include "app/modeling/Texture.hpp"
 #include "app/modeling/PropertyValue.hpp"
+#include "app/modeling/Texture.hpp"
 #include <glm/glm.hpp>
-#define VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
-#include <vulkan/vulkan_raii.hpp>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <memory>
 
+namespace scrap {
+    namespace modeling {
 
-namespace sauce {
-    struct LogicalDevice;
-}
+        struct MaterialProperties {
+            glm::vec4 baseColorFactor = glm::vec4(1.0f);
+            float metallicFactor = 1.0f;
+            float roughnessFactor = 1.0f;
 
-namespace sauce {
-namespace modeling {
+            glm::vec3 emissiveFactor = glm::vec3(0.0f);
+            float normalScale = 1.0f;
+            float occlusionStrength = 1.0f;
 
-struct MaterialProperties {
-    glm::vec4 baseColorFactor = glm::vec4(1.0f);
-    float metallicFactor = 1.0f;
-    float roughnessFactor = 1.0f;
+            enum class AlphaMode {
+                Opaque,
+                Mask,
+                Blend
+            };
 
-    glm::vec3 emissiveFactor = glm::vec3(0.0f);
-    float normalScale = 1.0f;
-    float occlusionStrength = 1.0f;
+            AlphaMode alphaMode = AlphaMode::Opaque;
+            float alphaCutoff = 0.5f;
+            bool doubleSided = false;
+        };
 
-    enum class AlphaMode {
-        Opaque,
-        Mask,
-        Blend
-    };
+        struct MaterialUBO {
+            glm::vec4 baseColorFactor;
+            float metallicFactor;
+            float roughnessFactor;
+            float normalScale;
+            float occlusionStrength;
+            glm::vec4 emissiveFactor_alphaCutoff;
+        };
 
-    AlphaMode alphaMode = AlphaMode::Opaque;
-    float alphaCutoff = 0.5f;
-    bool doubleSided = false;
-};
+        class Material {
+          public:
+            Material(const std::string& name = "");
 
-// GPU-side UBO layout (std140-friendly)
-struct MaterialUBO {
-    glm::vec4 baseColorFactor;
-    float metallicFactor;
-    float roughnessFactor;
-    float normalScale;
-    float occlusionStrength;
-    glm::vec4 emissiveFactor_alphaCutoff; // xyz = emissive, w = alphaCutoff
-};
+            const std::string& getName() const {
+                return name;
+            }
+            const MaterialProperties& getProperties() const {
+                return properties;
+            }
+            MaterialProperties& getProperties() {
+                return properties;
+            }
 
-class Material {
-public:
-    Material(const std::string& name = "");
+            std::shared_ptr<Texture> getTexture(TextureType type) const;
+            void setTexture(TextureType type, std::shared_ptr<Texture> texture);
+            bool hasTexture(TextureType type) const;
 
-    const std::string& getName() const { return name; }
-    const MaterialProperties& getProperties() const { return properties; }
-    MaterialProperties& getProperties() { return properties; }
+            const std::unordered_map<TextureType, std::shared_ptr<Texture>>& getTextures() const {
+                return textures;
+            }
 
-    std::vector<vk::DescriptorBufferInfo> getDescriptorBufferInfos() const;
-    std::vector<vk::DescriptorImageInfo>  getDescriptorImageInfos(
-        const vk::raii::ImageView& defaultView,
-        const vk::raii::Sampler& defaultSampler) const;
+            const std::unordered_map<std::string, PropertyValue>& getMetadata() const {
+                return metadata;
+            }
+            void setMetadata(const std::string& key, const PropertyValue& value);
+            bool hasMetadata(const std::string& key) const;
 
-    std::shared_ptr<Texture> getTexture(TextureType type) const;
-    void setTexture(TextureType type, std::shared_ptr<Texture> texture);
-    bool hasTexture(TextureType type) const;
+            static void cleanup();
 
-    const std::unordered_map<TextureType, std::shared_ptr<Texture>>&
-    getTextures() const { return textures; }
+          private:
+            std::string name;
+            MaterialProperties properties;
+            std::unordered_map<TextureType, std::shared_ptr<Texture>> textures;
+            std::unordered_map<std::string, PropertyValue> metadata;
+        };
 
-    const std::unordered_map<std::string, PropertyValue>& getMetadata() const { return metadata; }
-    void setMetadata(const std::string& key, const PropertyValue& value);
-    bool hasMetadata(const std::string& key) const;
-
-    // Vulkan resource management
-    static void initDescriptorSetLayout(const sauce::LogicalDevice& logicalDevice);
-    static const vk::raii::DescriptorSetLayout& getDescriptorSetLayout();
-    static void cleanup();
-
-    const vk::raii::DescriptorSet& getDescriptorSet() const { return *descriptorSet; }
-    bool hasDescriptorSet() const { return (bool)descriptorSet; }
-
-    void initVulkanResources(
-        const sauce::LogicalDevice& logicalDevice,
-        vk::raii::PhysicalDevice& physicalDevice,
-        vk::raii::CommandPool& commandPool,
-        vk::raii::Queue& queue,
-        const vk::raii::DescriptorPool& descriptorPool,
-        const vk::raii::ImageView& defaultView,
-        const vk::raii::Sampler& defaultSampler
-    );
-
-private:
-    std::string name;
-    MaterialProperties properties;
-
-    std::unordered_map<TextureType, std::shared_ptr<Texture>> textures;
-    std::unordered_map<std::string, PropertyValue> metadata;
-
-    // Vulkan resources
-    static std::unique_ptr<vk::raii::DescriptorSetLayout> descriptorSetLayout;
-    std::unique_ptr<vk::raii::DescriptorSet> descriptorSet;
-    std::unique_ptr<vk::raii::Buffer> uniformBuffer;
-    std::unique_ptr<vk::raii::DeviceMemory> uniformBufferMemory;
-
-    // Helpers
-    void updateUniformBuffer(const sauce::LogicalDevice& logicalDevice) const;
-};
-
-} // namespace modeling
-} // namespace sauce
+    } // namespace modeling
+} // namespace scrap

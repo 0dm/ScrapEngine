@@ -2,31 +2,39 @@
 
 #include <string>
 
-namespace sauce
-{
+namespace scrap {
 
-class Entity;
+    class Entity;
 
-class Component
-{
-public:
-  const std::string name;
+    class Component {
+      public:
+        const std::string name;
 
-  Component(std::string n = "Component") : name(n) {}
-  virtual ~Component() {}
+        Component(std::string n = "Component") : name(n) {
+        }
+        virtual ~Component() {
+        }
 
-  virtual bool getActive() { return this->active; }
-  virtual void setActive(bool newState) { this->active = newState; }
+        virtual bool getActive() {
+            return this->active;
+        }
+        virtual void setActive(bool newState) {
+            this->active = newState;
+        }
 
-  virtual void setOwner(Entity *newOwner) { this->owner = newOwner; }
-  virtual Entity *getOwner() { return this->owner; }
+        virtual void setOwner(Entity* newOwner) {
+            this->owner = newOwner;
+        }
+        virtual Entity* getOwner() {
+            return this->owner;
+        }
 
-  virtual void update(float deltaT) {};
-  virtual void render() {};
+        virtual void update(float deltaT) {};
+        virtual void render() {};
 
-private:
-  sauce::Entity *owner = nullptr;
-  bool active = true;
-};
+      private:
+        scrap::Entity* owner = nullptr;
+        bool active = true;
+    };
 
-}
+} // namespace scrap

@@ -1,5 +1,5 @@
 {
-  "name": "sauce-engine",
+  "name": "scrap-engine",
   "version": "0.1.0",
   "dependencies": [
     "glm",

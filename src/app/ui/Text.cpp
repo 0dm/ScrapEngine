@@ -1,15 +1,17 @@
-#include <app/ui/components/Text.hpp>
 #include <algorithm>
+#include <app/ui/components/Text.hpp>
 #include <string>
 
-namespace sauce::ui{
+namespace scrap::ui {
 
-Text::Text(const std::string& name, const std::string& text)
- : ImGuiComponent(name), text(text) {} 
+    Text::Text(const std::string& name, const std::string& text)
+        : ImGuiComponent(name), text(text) {
+    }
 
-void Text::render() { 
-    if (!enabled) return; 
-    ImGui::Text("%s", text.c_str());
-}
+    void Text::render() {
+        if (!enabled)
+            return;
+        ImGui::Text("%s", text.c_str());
+    }
 
-}
+} // namespace scrap::ui

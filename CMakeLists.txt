@@ -1,37 +1,30 @@
 cmake_minimum_required(VERSION 3.30)
 
-project(SauceEngine LANGUAGES CXX OBJCXX)
+project(ScrapEngine LANGUAGES CXX OBJCXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(SAUCE_IOS FALSE)
+set(SCRAP_IOS FALSE)
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-  set(SAUCE_IOS TRUE)
+  set(SCRAP_IOS TRUE)
 endif()
 
-set(SAUCE_MACOS FALSE)
-if(APPLE AND NOT SAUCE_IOS)
-  set(SAUCE_MACOS TRUE)
+set(SCRAP_MACOS FALSE)
+if(APPLE AND NOT SCRAP_IOS)
+  set(SCRAP_MACOS TRUE)
 endif()
 
 if(NOT APPLE)
-  message(FATAL_ERROR "SauceEngine platform support is currently implemented for Apple targets only (macOS and iOS).")
+  message(FATAL_ERROR "ScrapEngine platform support is currently implemented for Apple targets only (macOS and iOS).")
 endif()
 
 enable_testing()
 
-if(WIN32)
-  set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
-  set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
-  set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
-  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
-endif()
-
 function(configure_macos_app_icon target icon_path bundle_name bundle_identifier)
-  if(NOT SAUCE_MACOS OR NOT EXISTS "${icon_path}")
+  if(NOT SCRAP_MACOS OR NOT EXISTS "${icon_path}")
     return()
   endif()
 
@@ -49,19 +42,8 @@ function(configure_macos_app_icon target icon_path bundle_name bundle_identifier
   )
 endfunction()
 
-function(configure_windows_app_icon target icon_path)
-  if(NOT WIN32 OR NOT EXISTS "${icon_path}")
-    return()
-  endif()
-
-  set(resource_file "${CMAKE_CURRENT_BINARY_DIR}/${target}_icon.rc")
-  set(APP_ICON_PATH "${icon_path}")
-  configure_file("${PROJECT_SOURCE_DIR}/cmake/AppIcon.rc.in" "${resource_file}" @ONLY)
-  target_sources(${target} PRIVATE "${resource_file}")
-endfunction()
-
 function(configure_macos_cli_symlink target cli_path)
-  if(NOT SAUCE_MACOS)
+  if(NOT SCRAP_MACOS)
     return()
   endif()
 
@@ -72,46 +54,21 @@ function(configure_macos_cli_symlink target cli_path)
   )
 endfunction()
 
-function(sauce_detect_vulkan_sdk)
-  if(DEFINED SAUCE_VULKAN_SDK AND EXISTS "${SAUCE_VULKAN_SDK}")
-    set(_detected_sdk "${SAUCE_VULKAN_SDK}")
-  elseif(DEFINED ENV{VULKAN_SDK} AND EXISTS "$ENV{VULKAN_SDK}")
-    set(_detected_sdk "$ENV{VULKAN_SDK}")
-  else()
-    file(GLOB _sdk_candidates LIST_DIRECTORIES TRUE "$ENV{HOME}/VulkanSDK/*")
-    list(SORT _sdk_candidates COMPARE NATURAL ORDER DESCENDING)
-    foreach(_candidate IN LISTS _sdk_candidates)
-      if(EXISTS "${_candidate}/macOS/include/vulkan/vulkan.h")
-        set(_detected_sdk "${_candidate}")
-        break()
-      endif()
-    endforeach()
-  endif()
-
-  if(DEFINED _detected_sdk)
-    set(SAUCE_VULKAN_SDK "${_detected_sdk}" CACHE PATH "Path to the Vulkan SDK root")
-  endif()
-endfunction()
-
-function(sauce_configure_target target)
+function(scrap_configure_target target)
   target_include_directories(${target} PRIVATE
     ${PROJECT_SOURCE_DIR}/include
     ${TINYGLTF_INCLUDE_DIRS}
   )
 
-  target_compile_definitions(${target} PRIVATE VK_USE_PLATFORM_METAL_EXT)
-
-  if(NOT WIN32)
-    target_compile_options(${target} PRIVATE ${SAUCE_WARNINGS})
-  endif()
+  target_compile_options(${target} PRIVATE ${SCRAP_WARNINGS})
 
   if(APPLE)
     target_link_options(${target} PRIVATE "LINKER:-no_warn_duplicate_libraries")
   endif()
 endfunction()
 
-function(sauce_link_platform_frameworks target)
-  if(SAUCE_IOS)
+function(scrap_link_platform_frameworks target)
+  if(SCRAP_IOS)
     target_link_libraries(${target} PRIVATE
       ${FOUNDATION_FRAMEWORK}
       ${UIKIT_FRAMEWORK}
@@ -128,7 +85,7 @@ function(sauce_link_platform_frameworks target)
   endif()
 endfunction()
 
-function(sauce_copy_shaders target)
+function(scrap_copy_shaders target)
   add_dependencies(${target} shaders)
 
   add_custom_command(TARGET ${target} POST_BUILD
@@ -137,7 +94,7 @@ function(sauce_copy_shaders target)
   )
 endfunction()
 
-function(sauce_copy_runtime_assets target)
+function(scrap_copy_runtime_assets target)
   add_custom_command(TARGET ${target} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     ${PROJECT_SOURCE_DIR}/assets $<TARGET_FILE_DIR:${target}>/assets
@@ -147,7 +104,7 @@ endfunction()
 file(GLOB_RECURSE APP_SOURCES CONFIGURE_DEPENDS
   "${PROJECT_SOURCE_DIR}/src/app/*.cpp"
 )
-list(FILTER APP_SOURCES EXCLUDE REGEX "/SauceEngineApp\\.cpp$")
+list(FILTER APP_SOURCES EXCLUDE REGEX "/ScrapEngineApp\\.cpp$")
 list(FILTER APP_SOURCES EXCLUDE REGEX "/ImGuiRenderer\\.cpp$")
 
 file(GLOB_RECURSE PHYSICS_SOURCES CONFIGURE_DEPENDS
@@ -158,59 +115,36 @@ file(GLOB_RECURSE MODELING_SOURCES CONFIGURE_DEPENDS
   "${PROJECT_SOURCE_DIR}/src/app/modeling/*.cpp"
 )
 
-file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS
-  "${PROJECT_SOURCE_DIR}/src/editor/*.cpp"
-)
-
-set(SAUCE_WARNINGS -Wall -Wpedantic -Wextra -Wreorder-init-list -g -O2)
-
-sauce_detect_vulkan_sdk()
+set(SCRAP_WARNINGS -Wall -Wpedantic -Wextra -Wreorder-init-list -g -O2)
 
 if(DEFINED VCPKG_INSTALLED_DIR)
   if(DEFINED VCPKG_TARGET_TRIPLET)
-    set(_sauce_vcpkg_triplet_root "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
-  elseif(SAUCE_IOS)
-    set(_sauce_vcpkg_triplet_root "${VCPKG_INSTALLED_DIR}/arm64-ios")
-  elseif(SAUCE_MACOS)
-    set(_sauce_vcpkg_triplet_root "${VCPKG_INSTALLED_DIR}/arm64-osx")
+    set(_scrap_vcpkg_triplet_root "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
+  elseif(SCRAP_IOS)
+    set(_scrap_vcpkg_triplet_root "${VCPKG_INSTALLED_DIR}/arm64-ios")
+  elseif(SCRAP_MACOS)
+    set(_scrap_vcpkg_triplet_root "${VCPKG_INSTALLED_DIR}/arm64-osx")
   endif()
 
-  if(DEFINED _sauce_vcpkg_triplet_root AND EXISTS "${_sauce_vcpkg_triplet_root}")
+  if(DEFINED _scrap_vcpkg_triplet_root AND EXISTS "${_scrap_vcpkg_triplet_root}")
     list(APPEND CMAKE_PREFIX_PATH
-      "${_sauce_vcpkg_triplet_root}"
-      "${_sauce_vcpkg_triplet_root}/share"
+      "${_scrap_vcpkg_triplet_root}"
+      "${_scrap_vcpkg_triplet_root}/share"
     )
   endif()
 endif()
 
-if(SAUCE_VULKAN_SDK)
-  if(NOT Vulkan_INCLUDE_DIR AND EXISTS "${SAUCE_VULKAN_SDK}/macOS/include/vulkan/vulkan.h")
-    set(Vulkan_INCLUDE_DIR "${SAUCE_VULKAN_SDK}/macOS/include" CACHE PATH "Path to Vulkan headers")
-  endif()
-
-  if(SAUCE_IOS)
-    set(_default_vulkan_library "${SAUCE_VULKAN_SDK}/iOS/lib/vulkan.framework/vulkan")
-  else()
-    set(_default_vulkan_library "${SAUCE_VULKAN_SDK}/macOS/lib/libvulkan.dylib")
-  endif()
-
-  if(NOT Vulkan_LIBRARY AND EXISTS "${_default_vulkan_library}")
-    set(Vulkan_LIBRARY "${_default_vulkan_library}" CACHE FILEPATH "Path to Vulkan loader library")
-  endif()
-endif()
-
-find_package(Vulkan REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
 
-if(SAUCE_MACOS)
+if(SCRAP_MACOS)
   find_package(Boost REQUIRED COMPONENTS program_options)
 endif()
 
 find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
 find_library(QUARTZCORE_FRAMEWORK QuartzCore REQUIRED)
 find_library(METAL_FRAMEWORK Metal REQUIRED)
-if(SAUCE_IOS)
+if(SCRAP_IOS)
   find_library(UIKIT_FRAMEWORK UIKit REQUIRED)
 else()
   find_library(APPKIT_FRAMEWORK AppKit REQUIRED)
@@ -220,44 +154,45 @@ if(NOT TINYGLTF_INCLUDE_DIRS)
   message(FATAL_ERROR "Failed to locate tinygltf headers.")
 endif()
 
-set(SAUCE_IMGUI_SOURCES
+set(SCRAP_IMGUI_CORE_SOURCES
   third_party/imgui/imgui.cpp
   third_party/imgui/imgui_demo.cpp
   third_party/imgui/imgui_draw.cpp
   third_party/imgui/imgui_tables.cpp
   third_party/imgui/imgui_widgets.cpp
-  third_party/imgui/backends/imgui_impl_vulkan.cpp
   third_party/imgui/misc/cpp/imgui_stdlib.cpp
 )
 
-add_library(sauce_imgui STATIC ${SAUCE_IMGUI_SOURCES})
-add_library(imgui::imgui ALIAS sauce_imgui)
+add_library(scrap_imgui_core STATIC ${SCRAP_IMGUI_CORE_SOURCES})
 
-target_include_directories(sauce_imgui
-  PUBLIC
-    ${PROJECT_SOURCE_DIR}/third_party/imgui
-    ${PROJECT_SOURCE_DIR}/third_party/imgui/backends
-    ${PROJECT_SOURCE_DIR}/third_party/imgui/misc/cpp
+set(_scrap_imgui_include_dirs
+  ${PROJECT_SOURCE_DIR}/third_party/imgui
+  ${PROJECT_SOURCE_DIR}/third_party/imgui/backends
+  ${PROJECT_SOURCE_DIR}/third_party/imgui/misc/cpp
 )
 
-target_link_libraries(sauce_imgui PUBLIC Vulkan::Vulkan)
-sauce_configure_target(sauce_imgui)
+target_include_directories(scrap_imgui_core PUBLIC ${_scrap_imgui_include_dirs})
+scrap_configure_target(scrap_imgui_core)
 
-set(SAUCE_RENDER_SURFACE_SOURCES
-  src/app/RenderSurface.mm
+set(GPU_METAL_SOURCES
+  src/gpu/metal/LayerPresenter.mm
+  src/gpu/metal/MetalMeshUpload.mm
+  src/gpu/metal/MetalIBLResources.mm
+  src/gpu/metal/MetalPBRRenderer.mm
+  src/gpu/metal/MetalDeviceInfo.mm
 )
 
-set(SAUCE_MACOS_PLATFORM_SOURCES
+set(SCRAP_MACOS_PLATFORM_SOURCES
   src/app/platform/PlatformWindow.mm
 )
 
 add_subdirectory(${PROJECT_SOURCE_DIR}/shaders)
-if(SAUCE_MACOS)
+if(SCRAP_MACOS)
   add_subdirectory(${PROJECT_SOURCE_DIR}/src/launcher)
 endif()
 
-set(EXEC_NAME SauceEngine)
-if(SAUCE_IOS)
+set(EXEC_NAME ScrapEngine)
+if(SCRAP_IOS)
   add_executable(${EXEC_NAME} src/ios/main.mm)
 else()
   add_executable(${EXEC_NAME} src/main.cpp)
@@ -265,37 +200,36 @@ endif()
 
 target_sources(${EXEC_NAME} PRIVATE
   ${APP_SOURCES}
-  src/app/SauceEngineApp.cpp
-  src/app/ImGuiRenderer.cpp
+  src/app/ScrapEngineApp.cpp
   ${PHYSICS_SOURCES}
-  ${SAUCE_RENDER_SURFACE_SOURCES}
+  ${GPU_METAL_SOURCES}
+  third_party/imgui/backends/imgui_impl_metal.mm
 )
 
-if(SAUCE_MACOS)
-  target_sources(${EXEC_NAME} PRIVATE ${SAUCE_MACOS_PLATFORM_SOURCES})
+if(SCRAP_MACOS)
+  target_sources(${EXEC_NAME} PRIVATE ${SCRAP_MACOS_PLATFORM_SOURCES})
 endif()
 
 target_link_libraries(${EXEC_NAME}
-  PUBLIC Vulkan::Vulkan
-  PRIVATE imgui::imgui nlohmann_json::nlohmann_json
+  PRIVATE scrap_imgui_core nlohmann_json::nlohmann_json
 )
 
-if(SAUCE_MACOS)
+if(SCRAP_MACOS)
   target_link_libraries(${EXEC_NAME}
     PUBLIC Boost::program_options
-    PRIVATE launcherLib
+    PRIVATE scrap_launcher
   )
 endif()
 
-sauce_configure_target(${EXEC_NAME})
-sauce_link_platform_frameworks(${EXEC_NAME})
+scrap_configure_target(${EXEC_NAME})
+scrap_link_platform_frameworks(${EXEC_NAME})
 
-if(SAUCE_IOS)
+if(SCRAP_IOS)
   set_target_properties(${EXEC_NAME} PROPERTIES
     MACOSX_BUNDLE TRUE
-    MACOSX_BUNDLE_BUNDLE_NAME "SauceEngine"
-    MACOSX_BUNDLE_GUI_IDENTIFIER "com.sauceengine.ios"
-    XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.sauceengine.ios"
+    MACOSX_BUNDLE_BUNDLE_NAME "ScrapEngine"
+    MACOSX_BUNDLE_GUI_IDENTIFIER "com.scrapengine.ios"
+    XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.scrapengine.ios"
     XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
     XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO"
     XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY ""
@@ -303,24 +237,23 @@ if(SAUCE_IOS)
   )
 endif()
 
-sauce_copy_shaders(${EXEC_NAME})
-sauce_copy_runtime_assets(${EXEC_NAME})
+scrap_copy_shaders(${EXEC_NAME})
+scrap_copy_runtime_assets(${EXEC_NAME})
 
-if(SAUCE_MACOS)
+if(SCRAP_MACOS)
+  set(_scrap_main_icns "${PROJECT_SOURCE_DIR}/assets/scrapengine.icns")
+
   configure_macos_app_icon(${EXEC_NAME}
-    "${PROJECT_SOURCE_DIR}/assets/sauceengine.icns"
-    "SauceEngine"
-    "com.sauceengine.app"
-  )
-  configure_windows_app_icon(${EXEC_NAME}
-    "${PROJECT_SOURCE_DIR}/assets/sauceengine.ico"
+    "${_scrap_main_icns}"
+    "ScrapEngine"
+    "com.scrapengine.app"
   )
   configure_macos_cli_symlink(${EXEC_NAME}
-    "${PROJECT_BINARY_DIR}/SauceEngine"
+    "${PROJECT_BINARY_DIR}/ScrapEngine"
   )
 endif()
 
-if(SAUCE_MACOS)
+if(SCRAP_MACOS)
   add_executable(modeltest src/modeltest.cpp)
 
   target_sources(modeltest PRIVATE
@@ -328,30 +261,7 @@ if(SAUCE_MACOS)
     ${MODELING_SOURCES}
   )
 
-  target_link_libraries(modeltest PUBLIC Vulkan::Vulkan)
-  sauce_configure_target(modeltest)
-
-  add_executable(modelviewer src/modelviewer.cpp)
-
-  target_sources(modelviewer PRIVATE
-    src/app/ModelViewerRenderer.cpp
-    src/app/ImGuiRenderer.cpp
-    src/app/components/MeshRendererComponent.cpp
-    src/app/components/RigidBodyComponent.cpp
-    ${MODELING_SOURCES}
-    ${SAUCE_RENDER_SURFACE_SOURCES}
-    ${SAUCE_MACOS_PLATFORM_SOURCES}
-  )
-
-  target_link_libraries(modelviewer
-    PUBLIC Vulkan::Vulkan
-    PRIVATE imgui::imgui
-  )
-
-  sauce_configure_target(modelviewer)
-  sauce_link_platform_frameworks(modelviewer)
-  sauce_copy_shaders(modelviewer)
-  sauce_copy_runtime_assets(modelviewer)
+  scrap_configure_target(modeltest)
 
   add_executable(jenga_scene_builder
     src/jenga_scene_builder.cpp
@@ -375,8 +285,7 @@ if(SAUCE_MACOS)
     src/physics/Cloth.cpp
   )
 
-  target_link_libraries(jenga_scene_builder PUBLIC Vulkan::Vulkan)
-  sauce_configure_target(jenga_scene_builder)
+  scrap_configure_target(jenga_scene_builder)
 
   add_custom_target(generate_jenga_scene
     COMMAND $<TARGET_FILE:jenga_scene_builder>
@@ -396,18 +305,21 @@ if(SAUCE_MACOS)
     src/physics/XPBD.cpp
   )
 
-  target_link_libraries(xpbd_cloth_harness PUBLIC Vulkan::Vulkan)
-  sauce_configure_target(xpbd_cloth_harness)
+  scrap_configure_target(xpbd_cloth_harness)
   add_test(NAME xpbd_cloth_harness COMMAND xpbd_cloth_harness)
 
   add_executable(cloth_scene_smoke src/cloth_scene_smoke.cpp)
 
-  target_sources(cloth_scene_smoke PRIVATE ${APP_SOURCES} ${PHYSICS_SOURCES})
-  target_link_libraries(cloth_scene_smoke
-    PUBLIC Vulkan::Vulkan
-    PRIVATE nlohmann_json::nlohmann_json
+  target_sources(cloth_scene_smoke PRIVATE
+    ${APP_SOURCES}
+    ${PHYSICS_SOURCES}
+    src/gpu/metal/MetalDeviceInfo.mm
   )
-  sauce_configure_target(cloth_scene_smoke)
+  target_link_libraries(cloth_scene_smoke
+    PRIVATE scrap_imgui_core nlohmann_json::nlohmann_json
+  )
+  scrap_configure_target(cloth_scene_smoke)
+  scrap_link_platform_frameworks(cloth_scene_smoke)
   add_test(NAME cloth_scene_smoke COMMAND cloth_scene_smoke)
 
   add_executable(xpbd_rigid_harness
@@ -439,8 +351,7 @@ if(SAUCE_MACOS)
     src/physics/XPBDRigidSolve.cpp
   )
 
-  target_link_libraries(xpbd_rigid_harness PUBLIC Vulkan::Vulkan)
-  sauce_configure_target(xpbd_rigid_harness)
+  scrap_configure_target(xpbd_rigid_harness)
 
   add_test(NAME xpbd_stack_stability COMMAND xpbd_rigid_harness --test-stack-stability
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
@@ -448,41 +359,20 @@ if(SAUCE_MACOS)
   add_test(NAME xpbd_piecewise_transfer COMMAND xpbd_rigid_harness --test-piecewise-transfer
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
   )
+endif()
 
-  add_executable(sauceeditor ${EDITOR_SOURCES})
-
-  target_sources(sauceeditor PRIVATE
-    ${APP_SOURCES}
-    src/app/ImGuiRenderer.cpp
-    ${PHYSICS_SOURCES}
-    ${SAUCE_RENDER_SURFACE_SOURCES}
-    ${SAUCE_MACOS_PLATFORM_SOURCES}
+find_program(SCRAP_CLANG_FORMAT clang-format)
+if(SCRAP_CLANG_FORMAT)
+  add_custom_target(format
+    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/cmake/clang-format-run.bash"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    COMMENT "clang-format (in-place, excludes third_party/)"
+    VERBATIM
   )
-
-  target_link_libraries(sauceeditor
-    PUBLIC Vulkan::Vulkan
-    PRIVATE imgui::imgui nlohmann_json::nlohmann_json
-  )
-
-  sauce_configure_target(sauceeditor)
-  sauce_link_platform_frameworks(sauceeditor)
-
-  if(TARGET editorGridVert)
-    add_dependencies(sauceeditor editorGridVert editorGridFrag editorUnlitVert editorUnlitFrag)
-  endif()
-
-  sauce_copy_shaders(sauceeditor)
-  sauce_copy_runtime_assets(sauceeditor)
-
-  configure_macos_app_icon(sauceeditor
-    "${PROJECT_SOURCE_DIR}/assets/sauceeditor.icns"
-    "SauceEditor"
-    "com.sauceengine.editor"
-  )
-  configure_windows_app_icon(sauceeditor
-    "${PROJECT_SOURCE_DIR}/assets/sauceeditor.ico"
-  )
-  configure_macos_cli_symlink(sauceeditor
-    "${PROJECT_BINARY_DIR}/sauceeditor"
+else()
+  add_custom_target(format
+    COMMAND "${CMAKE_COMMAND}" -E echo "clang-format not found in PATH; install LLVM and add clang-format to PATH."
+    COMMAND bash -c "exit 1"
+    VERBATIM
   )
 endif()

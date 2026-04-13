@@ -1,0 +1,304 @@
+{
+  "asset": {
+    "generator": "ScrapEngine simple cloth demo",
+    "version": "2.0"
+  },
+  "extensionsUsed": [
+    "SCRAP_cloth"
+  ],
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "SimpleClothScene",
+      "nodes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "SimpleCloth",
+      "mesh": 0,
+      "translation": [
+        -1.5,
+        0.9,
+        0.5
+      ],
+      "extensions": {
+        "SCRAP_cloth": {
+          "defaultInvMass": 0.5,
+          "stretchCompliance": 0.0001,
+          "bendCompliance": 0.003,
+          "damping": 0.002,
+          "gravityScale": 1.0,
+          "solverSubsteps": 32,
+          "pinnedParticleIndices": [
+            56,
+            63
+          ]
+        }
+      }
+    },
+    {
+      "name": "PerspectiveTableTop",
+      "mesh": 1,
+      "translation": [
+        -1.5,
+        1.95,
+        -0.45
+      ],
+      "scale": [
+        2.4,
+        3.8,
+        0.14
+      ]
+    },
+    {
+      "name": "PerspectiveTableLegA",
+      "mesh": 1,
+      "translation": [
+        -2.45,
+        0.25,
+        -1.2
+      ],
+      "scale": [
+        0.14,
+        0.14,
+        1.5
+      ]
+    },
+    {
+      "name": "PerspectiveTableLegB",
+      "mesh": 1,
+      "translation": [
+        -0.55,
+        0.25,
+        -1.2
+      ],
+      "scale": [
+        0.14,
+        0.14,
+        1.5
+      ]
+    },
+    {
+      "name": "PerspectiveTableLegC",
+      "mesh": 1,
+      "translation": [
+        -2.45,
+        3.65,
+        -1.2
+      ],
+      "scale": [
+        0.14,
+        0.14,
+        1.5
+      ]
+    },
+    {
+      "name": "PerspectiveTableLegD",
+      "mesh": 1,
+      "translation": [
+        -0.55,
+        3.65,
+        -1.2
+      ],
+      "scale": [
+        0.14,
+        0.14,
+        1.5
+      ]
+    }
+  ],
+  "meshes": [
+    {
+      "name": "SimpleClothMesh",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 1,
+            "TEXCOORD_0": 2
+          },
+          "indices": 0,
+          "material": 0,
+          "mode": 4
+        }
+      ]
+    },
+    {
+      "name": "PerspectiveCube",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 4
+          },
+          "indices": 3,
+          "material": 1,
+          "mode": 4
+        }
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "name": "ClothChecker",
+      "doubleSided": true,
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 0
+        },
+        "baseColorFactor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.8
+      }
+    },
+    {
+      "name": "PerspectiveWood",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.47,
+          0.31,
+          0.18,
+          1.0
+        ],
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.85
+      }
+    }
+  ],
+  "textures": [
+    {
+      "source": 0
+    }
+  ],
+  "images": [
+    {
+      "uri": "cloth_checker.png"
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "simple_cloth.bin",
+      "byteLength": 2816
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 1176,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 1176,
+      "byteLength": 768,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 1944,
+      "byteLength": 512,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 2456,
+      "byteLength": 72,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 2528,
+      "byteLength": 288,
+      "target": 34962
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "byteOffset": 0,
+      "componentType": 5125,
+      "count": 294,
+      "type": "SCALAR",
+      "min": [
+        0
+      ],
+      "max": [
+        63
+      ]
+    },
+    {
+      "bufferView": 1,
+      "byteOffset": 0,
+      "componentType": 5126,
+      "count": 64,
+      "type": "VEC3",
+      "min": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "max": [
+        0.0,
+        2.1,
+        2.1
+      ]
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 0,
+      "componentType": 5126,
+      "count": 64,
+      "type": "VEC2",
+      "min": [
+        0.0,
+        0.0
+      ],
+      "max": [
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "bufferView": 3,
+      "byteOffset": 0,
+      "componentType": 5123,
+      "count": 36,
+      "type": "SCALAR",
+      "min": [
+        0
+      ],
+      "max": [
+        23
+      ]
+    },
+    {
+      "bufferView": 4,
+      "byteOffset": 0,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC3",
+      "min": [
+        -0.5,
+        -0.5,
+        -0.5
+      ],
+      "max": [
+        0.5,
+        0.5,
+        0.5
+      ]
+    }
+  ]
+}

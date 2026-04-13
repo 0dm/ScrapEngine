@@ -8,73 +8,67 @@
 #include <utility>
 #include <vector>
 
-namespace sauce {
-struct ClothSettings;
-class RigidBodyComponent;
-}
+namespace scrap {
+    struct ClothSettings;
+    class RigidBodyComponent;
+} // namespace scrap
 
 namespace physics {
 
-struct ClothData;
-struct CollisionConstraint;
-struct Vertex;
+    struct ClothData;
+    struct CollisionConstraint;
+    struct Vertex;
 
-struct XPBDSolver {
-  // Gauss-Seidel iterations per rigid-body solve pass
-  int solverIterations = 20;
-  int rigidSubsteps = 4;
+    struct XPBDSolver {
+        // Gauss-Seidel iterations per rigid-body solve pass
+        int solverIterations = 20;
+        int rigidSubsteps = 4;
 
-  // Normalized gravity direction for support-loss detection (default: -Z)
-  glm::vec3 gravityDirection = glm::vec3(0.0f, 0.0f, -1.0f);
+        // Normalized gravity direction for support-loss detection (default: -Z)
+        glm::vec3 gravityDirection = glm::vec3(0.0f, 0.0f, -1.0f);
 
-  // Dragging keeps the selected body dynamic, but its contacts can use a reduced friction
-  // coefficient so blocks can be extracted without turning the full tower into a low-friction pile.
-  const sauce::RigidBodyComponent* dragBody = nullptr;
-  float dragContactFrictionScale = 0.02f;
+        // Dragging keeps the selected body dynamic, but its contacts can use a reduced friction
+        // coefficient so blocks can be extracted without turning the full tower into a low-friction pile.
+        const scrap::RigidBodyComponent* dragBody = nullptr;
+        float dragContactFrictionScale = 0.02f;
 
-  bool contactDebugEnabled = false;
+        bool contactDebugEnabled = false;
 
-  void solvePositions(std::vector<sauce::RigidBodyComponent*>& rigidBodies,
-                      float deltatime);
+        void solvePositions(std::vector<scrap::RigidBodyComponent*>& rigidBodies, float deltatime);
 
-  // Cloth-only pipeline: external acceleration, substepped XPBD on particle arrays (rigid bodies
-  // untouched). Lambdas reset at the start of each substep.
-  void solveCloth(ClothData& cloth,
-                  const sauce::ClothSettings& settings,
-                  float deltatime,
-                  const glm::vec3& externalAcceleration = glm::vec3(0.0f, 0.0f, -9.81f));
+        // Cloth-only pipeline: external acceleration, substepped XPBD on particle arrays (rigid bodies
+        // untouched). Lambdas reset at the start of each substep.
+        void solveCloth(ClothData& cloth, const scrap::ClothSettings& settings, float deltatime,
+                        const glm::vec3& externalAcceleration = glm::vec3(0.0f, 0.0f, -9.81f));
 
-  std::vector<CollisionConstraint> generateCollisionConstraints(
-      const std::vector<sauce::RigidBodyComponent*>& rigidBodies);
+        std::vector<CollisionConstraint> generateCollisionConstraints(
+            const std::vector<scrap::RigidBodyComponent*>& rigidBodies);
 
-private:
-  void projectConstraints(
-      std::vector<Vertex>& vertices,
-      std::vector<CollisionConstraint>& constraints,
-      float deltatime);
-  void captureCollisionLambdaWarmStart(
-      const std::vector<sauce::RigidBodyComponent*>& rigidBodies,
-      const std::vector<CollisionConstraint>& constraints);
-  void wakeUnsupportedBodies(
-      const std::vector<sauce::RigidBodyComponent*>& rigidBodies) const;
+      private:
+        void projectConstraints(std::vector<Vertex>& vertices,
+                                std::vector<CollisionConstraint>& constraints, float deltatime);
+        void captureCollisionLambdaWarmStart(
+            const std::vector<scrap::RigidBodyComponent*>& rigidBodies,
+            const std::vector<CollisionConstraint>& constraints);
+        void wakeUnsupportedBodies(
+            const std::vector<scrap::RigidBodyComponent*>& rigidBodies) const;
 
-  struct CollisionContact {
-    uint32_t indexA = 0;
-    uint32_t indexB = 0;
-    glm::vec3 pointA = glm::vec3(0.0f);
-    glm::vec3 pointB = glm::vec3(0.0f);
-    glm::vec3 contactNormal = glm::vec3(0.0f, 1.0f, 0.0f);
-    float penetrationDepth = 0.0f;
-  };
+        struct CollisionContact {
+            uint32_t indexA = 0;
+            uint32_t indexB = 0;
+            glm::vec3 pointA = glm::vec3(0.0f);
+            glm::vec3 pointB = glm::vec3(0.0f);
+            glm::vec3 contactNormal = glm::vec3(0.0f, 1.0f, 0.0f);
+            float penetrationDepth = 0.0f;
+        };
 
-  std::vector<CollisionContact> collectCollisionContacts(
-      const std::vector<sauce::RigidBodyComponent*>& rigidBodies) const;
-  void applyCollisionVelocityResponse(
-      const std::vector<sauce::RigidBodyComponent*>& rigidBodies,
-      const std::vector<CollisionContact>& contacts,
-      float deltatime) const;
+        std::vector<CollisionContact> collectCollisionContacts(
+            const std::vector<scrap::RigidBodyComponent*>& rigidBodies) const;
+        void applyCollisionVelocityResponse(
+            const std::vector<scrap::RigidBodyComponent*>& rigidBodies,
+            const std::vector<CollisionContact>& contacts, float deltatime) const;
 
-  std::map<std::pair<uintptr_t, uintptr_t>, std::vector<float>> collisionLambdaWarmStart;
-};
+        std::map<std::pair<uintptr_t, uintptr_t>, std::vector<float>> collisionLambdaWarmStart;
+    };
 
 } // namespace physics

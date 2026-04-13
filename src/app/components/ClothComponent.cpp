@@ -8,304 +8,289 @@
 #include <cmath>
 #include <utility>
 
-namespace sauce {
-namespace {
+namespace scrap {
+    namespace {
 
-constexpr float kTransformPositionEpsilon = 1e-6f;
-constexpr float kTransformScaleEpsilon = 1e-6f;
-constexpr float kTransformRotationDotEpsilon = 1e-6f;
+        constexpr float kTransformPositionEpsilon = 1e-6f;
+        constexpr float kTransformScaleEpsilon = 1e-6f;
+        constexpr float kTransformRotationDotEpsilon = 1e-6f;
 
-glm::quat normalizedRotation(const glm::quat& rotation) {
-  const float len = glm::length(rotation);
-  if (len <= 1e-8f) {
-    return glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-  }
+        glm::quat normalizedRotation(const glm::quat& rotation) {
+            const float len = glm::length(rotation);
+            if (len <= 1e-8f) {
+                return glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+            }
 
-  return rotation / len;
-}
+            return rotation / len;
+        }
 
-modeling::Transform getSimulationTransform(Entity* owner) {
-  if (!owner) {
-    return {};
-  }
+        modeling::Transform getSimulationTransform(Entity* owner) {
+            if (!owner) {
+                return {};
+            }
 
-  auto* transform = owner->getComponent<TransformComponent>();
-  if (!transform) {
-    return {};
-  }
+            auto* transform = owner->getComponent<TransformComponent>();
+            if (!transform) {
+                return {};
+            }
 
-  return modeling::Transform(
-      transform->getTranslation(),
-      normalizedRotation(transform->getRotation()),
-      glm::vec3(1.0f));
-}
+            return modeling::Transform(transform->getTranslation(),
+                                       normalizedRotation(transform->getRotation()),
+                                       glm::vec3(1.0f));
+        }
 
-glm::vec3 toWorldPosition(
-    const modeling::Transform& transform,
-    const glm::vec3& localPosition) {
-  return transform.getRotation() * localPosition + transform.getTranslation();
-}
+        glm::vec3 toWorldPosition(const modeling::Transform& transform,
+                                  const glm::vec3& localPosition) {
+            return transform.getRotation() * localPosition + transform.getTranslation();
+        }
 
-glm::vec3 toLocalPosition(
-    const modeling::Transform& transform,
-    const glm::vec3& worldPosition) {
-  return glm::inverse(transform.getRotation()) *
-         (worldPosition - transform.getTranslation());
-}
+        glm::vec3 toLocalPosition(const modeling::Transform& transform,
+                                  const glm::vec3& worldPosition) {
+            return glm::inverse(transform.getRotation()) *
+                   (worldPosition - transform.getTranslation());
+        }
 
-bool transformsEquivalent(
-    const modeling::Transform& a,
-    const modeling::Transform& b) {
-  if (glm::length(a.getTranslation() - b.getTranslation()) >
-      kTransformPositionEpsilon) {
-    return false;
-  }
+        bool transformsEquivalent(const modeling::Transform& a, const modeling::Transform& b) {
+            if (glm::length(a.getTranslation() - b.getTranslation()) > kTransformPositionEpsilon) {
+                return false;
+            }
 
-  if (glm::length(a.getScale() - b.getScale()) > kTransformScaleEpsilon) {
-    return false;
-  }
+            if (glm::length(a.getScale() - b.getScale()) > kTransformScaleEpsilon) {
+                return false;
+            }
 
-  const glm::quat aRotation = normalizedRotation(a.getRotation());
-  const glm::quat bRotation = normalizedRotation(b.getRotation());
-  const float rotationDot = std::abs(glm::dot(aRotation, bRotation));
-  return std::abs(1.0f - rotationDot) <= kTransformRotationDotEpsilon;
-}
+            const glm::quat aRotation = normalizedRotation(a.getRotation());
+            const glm::quat bRotation = normalizedRotation(b.getRotation());
+            const float rotationDot = std::abs(glm::dot(aRotation, bRotation));
+            return std::abs(1.0f - rotationDot) <= kTransformRotationDotEpsilon;
+        }
 
-std::shared_ptr<modeling::Mesh> cloneMeshCpuData(
-    const std::shared_ptr<modeling::Mesh>& mesh) {
-  if (!mesh) {
-    return nullptr;
-  }
+        std::shared_ptr<modeling::Mesh> cloneMeshCpuData(
+            const std::shared_ptr<modeling::Mesh>& mesh) {
+            if (!mesh) {
+                return nullptr;
+            }
 
-  auto clone = std::make_shared<modeling::Mesh>(
-      mesh->getVertices(),
-      mesh->getIndices());
-  clone->setDynamicVertexBuffer(true);
-  for (const auto& [key, value] : mesh->getMetadata()) {
-    clone->setMetadata(key, value);
-  }
-  return clone;
-}
+            auto clone = std::make_shared<modeling::Mesh>(mesh->getVertices(), mesh->getIndices());
+            clone->setDynamicVertexBuffer(true);
+            for (const auto& [key, value] : mesh->getMetadata()) {
+                clone->setMetadata(key, value);
+            }
+            return clone;
+        }
 
-void applySettingsToClothData(physics::ClothData& data, const ClothSettings& settings) {
-  for (auto& constraint : data.stretchConstraints) {
-    constraint.compliance = settings.stretchCompliance;
-  }
-  for (auto& constraint : data.bendConstraints) {
-    constraint.compliance = settings.bendCompliance;
-  }
+        void applySettingsToClothData(physics::ClothData& data, const ClothSettings& settings) {
+            for (auto& constraint : data.stretchConstraints) {
+                constraint.compliance = settings.stretchCompliance;
+            }
+            for (auto& constraint : data.bendConstraints) {
+                constraint.compliance = settings.bendCompliance;
+            }
 
-  for (auto& particle : data.particles) {
-    particle.pinned = false;
-  }
-  for (uint32_t particleIndex : settings.pinnedParticleIndices) {
-    if (particleIndex < data.particles.size()) {
-      data.particles[particleIndex].pinned = true;
+            for (auto& particle : data.particles) {
+                particle.pinned = false;
+            }
+            for (uint32_t particleIndex : settings.pinnedParticleIndices) {
+                if (particleIndex < data.particles.size()) {
+                    data.particles[particleIndex].pinned = true;
+                }
+            }
+        }
+
+    } // namespace
+
+    ClothComponent::ClothComponent() : Component("ClothComponent") {
     }
-  }
-}
 
-} // namespace
+    ClothComponent::ClothComponent(std::shared_ptr<modeling::Mesh> sourceMesh)
+        : Component("ClothComponent") {
+        rebuildFromMesh(std::move(sourceMesh));
+    }
 
-ClothComponent::ClothComponent()
-    : Component("ClothComponent") {
-}
+    ClothComponent::ClothComponent(std::shared_ptr<modeling::Mesh> sourceMesh,
+                                   const ClothSettings& settings)
+        : Component("ClothComponent") {
+        rebuildFromMesh(std::move(sourceMesh), settings);
+    }
 
-ClothComponent::ClothComponent(std::shared_ptr<modeling::Mesh> sourceMesh)
-    : Component("ClothComponent") {
-  rebuildFromMesh(std::move(sourceMesh));
-}
+    void ClothComponent::setOwner(Entity* newOwner) {
+        Component::setOwner(newOwner);
+        syncSimulationTransform();
+    }
 
-ClothComponent::ClothComponent(
-    std::shared_ptr<modeling::Mesh> sourceMesh,
-    const ClothSettings& settings)
-    : Component("ClothComponent") {
-  rebuildFromMesh(std::move(sourceMesh), settings);
-}
+    void ClothComponent::setSettings(const ClothSettings& newSettings) {
+        settings = newSettings;
+        if (clothData.has_value()) {
+            applySettingsToClothData(*clothData, settings);
+        }
+    }
 
-void ClothComponent::setOwner(Entity* newOwner) {
-  Component::setOwner(newOwner);
-  syncSimulationTransform();
-}
+    bool ClothComponent::rebuildFromMesh(std::shared_ptr<modeling::Mesh> mesh,
+                                         float defaultInvMass) {
+        ClothSettings updatedSettings = settings;
+        updatedSettings.defaultInvMass = defaultInvMass;
+        return rebuildFromMesh(std::move(mesh), updatedSettings);
+    }
 
-void ClothComponent::setSettings(const ClothSettings& newSettings) {
-  settings = newSettings;
-  if (clothData.has_value()) {
-    applySettingsToClothData(*clothData, settings);
-  }
-}
+    bool ClothComponent::rebuildFromMesh(std::shared_ptr<modeling::Mesh> mesh,
+                                         const ClothSettings& newSettings) {
+        sourceMesh = std::move(mesh);
+        runtimeMesh.reset();
+        clothData.reset();
+        settings = newSettings;
 
-bool ClothComponent::rebuildFromMesh(
-    std::shared_ptr<modeling::Mesh> mesh,
-    float defaultInvMass) {
-  ClothSettings updatedSettings = settings;
-  updatedSettings.defaultInvMass = defaultInvMass;
-  return rebuildFromMesh(std::move(mesh), updatedSettings);
-}
+        if (!sourceMesh) {
+            lastBuildError = "No source mesh assigned.";
+            return false;
+        }
 
-bool ClothComponent::rebuildFromMesh(
-    std::shared_ptr<modeling::Mesh> mesh,
-    const ClothSettings& newSettings) {
-  sourceMesh = std::move(mesh);
-  runtimeMesh.reset();
-  clothData.reset();
-  settings = newSettings;
+        auto builtCloth =
+            physics::buildClothDataFromMesh(*sourceMesh, "Mesh", settings.defaultInvMass);
+        if (!builtCloth.has_value()) {
+            lastBuildError = "Mesh must contain valid triangle indices to build cloth data.";
+            return false;
+        }
 
-  if (!sourceMesh) {
-    lastBuildError = "No source mesh assigned.";
-    return false;
-  }
+        clothData = std::move(builtCloth);
+        applySettingsToClothData(*clothData, settings);
 
-  auto builtCloth = physics::buildClothDataFromMesh(
-      *sourceMesh,
-      "Mesh",
-      settings.defaultInvMass);
-  if (!builtCloth.has_value()) {
-    lastBuildError = "Mesh must contain valid triangle indices to build cloth data.";
-    return false;
-  }
+        runtimeMesh = cloneMeshCpuData(sourceMesh);
+        lastSimulationTransform = getSimulationTransform(getOwner());
+        runtimeMeshDirty = true;
 
-  clothData = std::move(builtCloth);
-  applySettingsToClothData(*clothData, settings);
+        for (auto& particle : clothData->particles) {
+            const glm::vec3 worldPosition =
+                toWorldPosition(lastSimulationTransform, particle.position);
+            particle.position = worldPosition;
+            particle.previousPosition = worldPosition;
+            particle.predictedPosition = worldPosition;
+        }
 
-  runtimeMesh = cloneMeshCpuData(sourceMesh);
-  lastSimulationTransform = getSimulationTransform(getOwner());
-  runtimeMeshDirty = true;
+        if (!syncRuntimeMesh()) {
+            return false;
+        }
 
-  for (auto& particle : clothData->particles) {
-    const glm::vec3 worldPosition =
-        toWorldPosition(lastSimulationTransform, particle.position);
-    particle.position = worldPosition;
-    particle.previousPosition = worldPosition;
-    particle.predictedPosition = worldPosition;
-  }
+        lastBuildError.clear();
+        return true;
+    }
 
-  if (!syncRuntimeMesh()) {
-    return false;
-  }
+    bool ClothComponent::rebuildFromSourceMesh() {
+        return rebuildFromSourceMesh(settings);
+    }
 
-  lastBuildError.clear();
-  return true;
-}
+    bool ClothComponent::rebuildFromSourceMesh(float defaultInvMass) {
+        ClothSettings updatedSettings = settings;
+        updatedSettings.defaultInvMass = defaultInvMass;
+        return rebuildFromSourceMesh(updatedSettings);
+    }
 
-bool ClothComponent::rebuildFromSourceMesh() {
-  return rebuildFromSourceMesh(settings);
-}
+    bool ClothComponent::rebuildFromSourceMesh(const ClothSettings& newSettings) {
+        return rebuildFromMesh(sourceMesh, newSettings);
+    }
 
-bool ClothComponent::rebuildFromSourceMesh(float defaultInvMass) {
-  ClothSettings updatedSettings = settings;
-  updatedSettings.defaultInvMass = defaultInvMass;
-  return rebuildFromSourceMesh(updatedSettings);
-}
+    bool ClothComponent::resetSimulation() {
+        return rebuildFromSourceMesh(settings);
+    }
 
-bool ClothComponent::rebuildFromSourceMesh(const ClothSettings& newSettings) {
-  return rebuildFromMesh(sourceMesh, newSettings);
-}
+    void ClothComponent::clear() {
+        runtimeMesh.reset();
+        clothData.reset();
+        lastSimulationTransform = {};
+        runtimeMeshDirty = false;
+        lastBuildError.clear();
+    }
 
-bool ClothComponent::resetSimulation() {
-  return rebuildFromSourceMesh(settings);
-}
+    const physics::ClothData* ClothComponent::getClothData() const {
+        return clothData ? &clothData.value() : nullptr;
+    }
 
-void ClothComponent::clear() {
-  runtimeMesh.reset();
-  clothData.reset();
-  lastSimulationTransform = {};
-  runtimeMeshDirty = false;
-  lastBuildError.clear();
-}
+    physics::ClothData* ClothComponent::getClothData() {
+        return clothData ? &clothData.value() : nullptr;
+    }
 
-const physics::ClothData* ClothComponent::getClothData() const {
-  return clothData ? &clothData.value() : nullptr;
-}
+    size_t ClothComponent::getParticleCount() const {
+        const auto* data = getClothData();
+        return data ? data->particles.size() : 0;
+    }
 
-physics::ClothData* ClothComponent::getClothData() {
-  return clothData ? &clothData.value() : nullptr;
-}
+    size_t ClothComponent::getTriangleCount() const {
+        const auto* data = getClothData();
+        return data ? data->topology.triangleCount() : 0;
+    }
 
-size_t ClothComponent::getParticleCount() const {
-  const auto* data = getClothData();
-  return data ? data->particles.size() : 0;
-}
+    size_t ClothComponent::getEdgeCount() const {
+        const auto* data = getClothData();
+        return data ? data->topology.edges.size() : 0;
+    }
 
-size_t ClothComponent::getTriangleCount() const {
-  const auto* data = getClothData();
-  return data ? data->topology.triangleCount() : 0;
-}
+    size_t ClothComponent::getStretchConstraintCount() const {
+        const auto* data = getClothData();
+        return data ? data->stretchConstraints.size() : 0;
+    }
 
-size_t ClothComponent::getEdgeCount() const {
-  const auto* data = getClothData();
-  return data ? data->topology.edges.size() : 0;
-}
+    size_t ClothComponent::getBendConstraintCount() const {
+        const auto* data = getClothData();
+        return data ? data->bendConstraints.size() : 0;
+    }
 
-size_t ClothComponent::getStretchConstraintCount() const {
-  const auto* data = getClothData();
-  return data ? data->stretchConstraints.size() : 0;
-}
+    void ClothComponent::syncSimulationTransform() {
+        const modeling::Transform currentTransform = getSimulationTransform(getOwner());
+        if (!clothData.has_value()) {
+            lastSimulationTransform = currentTransform;
+            return;
+        }
 
-size_t ClothComponent::getBendConstraintCount() const {
-  const auto* data = getClothData();
-  return data ? data->bendConstraints.size() : 0;
-}
+        if (transformsEquivalent(lastSimulationTransform, currentTransform)) {
+            lastSimulationTransform = currentTransform;
+            return;
+        }
 
-void ClothComponent::syncSimulationTransform() {
-  const modeling::Transform currentTransform = getSimulationTransform(getOwner());
-  if (!clothData.has_value()) {
-    lastSimulationTransform = currentTransform;
-    return;
-  }
+        const glm::quat previousRotation =
+            normalizedRotation(lastSimulationTransform.getRotation());
+        const glm::quat currentRotation = normalizedRotation(currentTransform.getRotation());
+        const glm::quat deltaRotation =
+            normalizedRotation(currentRotation * glm::inverse(previousRotation));
+        const glm::vec3 deltaTranslation = currentTransform.getTranslation() -
+                                           deltaRotation * lastSimulationTransform.getTranslation();
 
-  if (transformsEquivalent(lastSimulationTransform, currentTransform)) {
-    lastSimulationTransform = currentTransform;
-    return;
-  }
+        for (auto& particle : clothData->particles) {
+            particle.position = deltaRotation * particle.position + deltaTranslation;
+            particle.previousPosition =
+                deltaRotation * particle.previousPosition + deltaTranslation;
+            particle.predictedPosition =
+                deltaRotation * particle.predictedPosition + deltaTranslation;
+            particle.velocity = deltaRotation * particle.velocity;
+        }
 
-  const glm::quat previousRotation =
-      normalizedRotation(lastSimulationTransform.getRotation());
-  const glm::quat currentRotation =
-      normalizedRotation(currentTransform.getRotation());
-  const glm::quat deltaRotation =
-      normalizedRotation(currentRotation * glm::inverse(previousRotation));
-  const glm::vec3 deltaTranslation =
-      currentTransform.getTranslation() -
-      deltaRotation * lastSimulationTransform.getTranslation();
+        lastSimulationTransform = currentTransform;
+        runtimeMeshDirty = true;
+    }
 
-  for (auto& particle : clothData->particles) {
-    particle.position = deltaRotation * particle.position + deltaTranslation;
-    particle.previousPosition =
-        deltaRotation * particle.previousPosition + deltaTranslation;
-    particle.predictedPosition =
-        deltaRotation * particle.predictedPosition + deltaTranslation;
-    particle.velocity = deltaRotation * particle.velocity;
-  }
+    bool ClothComponent::syncRuntimeMesh(bool regenerateTangents) {
+        if (!clothData.has_value() || !runtimeMesh) {
+            lastBuildError = "No cloth data or runtime mesh available.";
+            return false;
+        }
 
-  lastSimulationTransform = currentTransform;
-  runtimeMeshDirty = true;
-}
+        auto& vertices = runtimeMesh->getVerticesMutable();
+        if (vertices.size() != clothData->particles.size()) {
+            lastBuildError = "Runtime mesh vertex count does not match cloth particle count.";
+            return false;
+        }
 
-bool ClothComponent::syncRuntimeMesh(bool regenerateTangents) {
-  if (!clothData.has_value() || !runtimeMesh) {
-    lastBuildError = "No cloth data or runtime mesh available.";
-    return false;
-  }
+        const modeling::Transform currentTransform = getSimulationTransform(getOwner());
+        for (size_t i = 0; i < clothData->particles.size(); ++i) {
+            vertices[i].position =
+                toLocalPosition(currentTransform, clothData->particles[i].position);
+        }
 
-  auto& vertices = runtimeMesh->getVerticesMutable();
-  if (vertices.size() != clothData->particles.size()) {
-    lastBuildError = "Runtime mesh vertex count does not match cloth particle count.";
-    return false;
-  }
+        runtimeMesh->generateNormals();
+        if (regenerateTangents) {
+            runtimeMesh->generateTangents();
+        }
+        runtimeMeshDirty = false;
+        lastBuildError.clear();
+        return true;
+    }
 
-  const modeling::Transform currentTransform = getSimulationTransform(getOwner());
-  for (size_t i = 0; i < clothData->particles.size(); ++i) {
-    vertices[i].position = toLocalPosition(currentTransform, clothData->particles[i].position);
-  }
-
-  runtimeMesh->generateNormals();
-  if (regenerateTangents) {
-    runtimeMesh->generateTangents();
-  }
-  runtimeMeshDirty = false;
-  lastBuildError.clear();
-  return true;
-}
-
-} // namespace sauce
+} // namespace scrap

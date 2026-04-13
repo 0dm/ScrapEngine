@@ -1,33 +1,34 @@
 #pragma once
 
-#include <editor/panels/EditorPanel.hpp>
 #include <app/modeling/PropertyValue.hpp>
+#include <editor/panels/EditorPanel.hpp>
 #include <unordered_map>
 
-namespace sauce {
+namespace scrap {
 
-class Entity;
+    class Entity;
 
-namespace modeling {
-class Mesh;
-class Material;
-}
+    namespace modeling {
+        class Mesh;
+        class Material;
+    } // namespace modeling
 
-} // namespace sauce
+} // namespace scrap
 
-namespace sauce::editor {
+namespace scrap::editor {
 
-class InspectorPanel : public EditorPanel {
-public:
-  InspectorPanel(EditorApp& app);
-  void render() override;
+    class InspectorPanel : public EditorPanel {
+      public:
+        InspectorPanel(EditorApp& app);
+        void render() override;
 
-private:
-  void drawTransformSection(sauce::Entity& entity);
-  void drawMeshRendererSection(sauce::Entity& entity);
-  void drawClothSection(sauce::Entity& entity);
-  void drawMetadataSection(const std::string& label,
-                           const std::unordered_map<std::string, sauce::modeling::PropertyValue>& metadata);
-};
+      private:
+        void drawTransformSection(scrap::Entity& entity);
+        void drawMeshRendererSection(scrap::Entity& entity);
+        void drawClothSection(scrap::Entity& entity);
+        void drawMetadataSection(
+            const std::string& label,
+            const std::unordered_map<std::string, scrap::modeling::PropertyValue>& metadata);
+    };
 
-} // namespace sauce::editor
+} // namespace scrap::editor

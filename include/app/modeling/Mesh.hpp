@@ -1,85 +1,62 @@
 #pragma once
 
-#include "app/Vertex.hpp"
 #include "app/modeling/PropertyValue.hpp"
-#include <vector>
+#include "app/modeling/Vertex.hpp"
 #include <memory>
 #include <unordered_map>
-#include <vulkan/vulkan_raii.hpp>
+#include <vector>
 
-namespace sauce {
-struct LogicalDevice;
-namespace modeling {
+namespace scrap {
+    namespace modeling {
 
-class Mesh {
-public:
-    Mesh() = default;
-    Mesh(const std::vector<sauce::Vertex>& vertices,
-         const std::vector<uint32_t>& indices);
-    ~Mesh();
+        class Mesh {
+          public:
+            Mesh() = default;
+            Mesh(const std::vector<scrap::Vertex>& vertices, const std::vector<uint32_t>& indices);
+            ~Mesh();
 
-    const std::vector<sauce::Vertex>& getVertices() const { return vertices; }
-    std::vector<sauce::Vertex>& getVerticesMutable() { return vertices; }
-    const std::vector<uint32_t>& getIndices() const { return indices; }
+            const std::vector<scrap::Vertex>& getVertices() const {
+                return vertices;
+            }
+            std::vector<scrap::Vertex>& getVerticesMutable() {
+                return vertices;
+            }
+            const std::vector<uint32_t>& getIndices() const {
+                return indices;
+            }
 
-    size_t getVertexCount() const { return vertices.size(); }
-    size_t getIndexCount() const { return indices.size(); }
+            size_t getVertexCount() const {
+                return vertices.size();
+            }
+            size_t getIndexCount() const {
+                return indices.size();
+            }
 
-    bool hasGPUData() const { return vertexBuffer != nullptr; }
+            /// Always false: no embedded GPU buffers (Metal uploads from CPU mesh data).
+            bool hasGPUData() const {
+                return false;
+            }
 
-    bool isValid() const;
+            bool isValid() const;
 
-    void initVulkanResources(
-        vk::raii::Device& device,
-        vk::raii::PhysicalDevice& physicalDevice);
+            const std::unordered_map<std::string, PropertyValue>& getMetadata() const {
+                return metadata;
+            }
+            void setMetadata(const std::string& key, const PropertyValue& value);
+            bool hasMetadata(const std::string& key) const;
 
-    void bind(vk::raii::CommandBuffer& cmd);
+            void generateNormals();
+            void generateTangents();
+            void setDynamicVertexBuffer(bool dynamic) {
+                dynamicVertexBuffer = dynamic;
+            }
 
-    void draw(vk::raii::CommandBuffer& cmd);
+          private:
+            std::vector<scrap::Vertex> vertices;
+            std::vector<uint32_t> indices;
+            std::unordered_map<std::string, PropertyValue> metadata;
+            bool dynamicVertexBuffer = false;
+        };
 
-    void setPipelineLayout(vk::raii::PipelineLayout* layout) {
-        pipelineLayout = layout;
-    }
-
-    vk::PipelineLayout getPipelineLayout() const {
-        return pipelineLayout ? **pipelineLayout : VK_NULL_HANDLE;
-    }
-
-    const std::unordered_map<std::string, PropertyValue>& getMetadata() const { return metadata; }
-    void setMetadata(const std::string& key, const PropertyValue& value);
-    bool hasMetadata(const std::string& key) const;
-
-    void generateNormals();
-    void generateTangents();
-    void setDynamicVertexBuffer(bool dynamic) { dynamicVertexBuffer = dynamic; }
-
-    // Optional GPU upload (Phase 6)
-    void initVulkanResources(const sauce::LogicalDevice& logicalDevice, vk::raii::PhysicalDevice& physicalDevice, vk::raii::CommandPool& commandPool, vk::raii::Queue& queue);
-    bool updateVertexBuffer(const sauce::LogicalDevice& logicalDevice, vk::raii::PhysicalDevice& physicalDevice, vk::raii::CommandPool& commandPool, vk::raii::Queue& queue);
-
-private:
-    // CPU data
-    std::vector<sauce::Vertex> vertices;
-    std::vector<uint32_t> indices;
-    std::unordered_map<std::string, PropertyValue> metadata;
-
-    // GPU resources (optional, for Phase 6)
-    std::unique_ptr<vk::raii::Buffer> vertexBuffer;
-    std::unique_ptr<vk::raii::Buffer> indexBuffer;
-    std::unique_ptr<vk::raii::DeviceMemory> vertexBufferMemory;
-    std::unique_ptr<vk::raii::DeviceMemory> indexBufferMemory;
-    vk::DeviceSize vertexBufferSizeBytes = 0;
-    void* mappedVertexData = nullptr;
-    bool dynamicVertexBuffer = false;
-
-    vk::raii::PipelineLayout* pipelineLayout = nullptr;
-
-    uint32_t findMemoryType(
-        vk::PhysicalDeviceMemoryProperties memProperties,
-        uint32_t typeFilter,
-        vk::MemoryPropertyFlags properties);
-    void releaseVertexBuffer();
-};
-
-} // namespace modeling
-} // namespace sauce
+    } // namespace modeling
+} // namespace scrap
