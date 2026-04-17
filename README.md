@@ -1,4 +1,4 @@
-# ScrapEngine
+# ~~SlopEngine~~ ScrapEngine
 
 Apple-only C++23 graphics and physics engine. Main app uses Metal. Scene/editor code is still mixed between newer Metal work and older Vulkan-era code.
 
