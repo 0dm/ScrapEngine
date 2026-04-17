@@ -1,5 +1,17 @@
 # ~~SlopEngine~~ ScrapEngine
 
+<table align="center">
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/8cb16793-0478-4e30-a66a-24699cd412b5" height="300"/>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/a926b738-9a6c-4e2a-89ec-7c97f5adaf94" height="300"/>
+    </td>
+  </tr>
+</table>
+
+
 Apple-only C++23 graphics and physics engine. Main app uses Metal. Scene/editor code is still mixed between newer Metal work and older Vulkan-era code.
 
 features:
